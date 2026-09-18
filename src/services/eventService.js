@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'https://tikora-backend.onrender.com/api/api/events';
+const API_URL = 'https://tikora-backend.onrender.com/api/events';
 
 export const getAllEvents = async () => {
   // We do not need the auth header here because this is a public route
