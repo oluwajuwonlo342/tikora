@@ -85,6 +85,7 @@ const Events = () => {
               key={cat}
               onClick={() => handleCategoryChange(cat)}
               className={`filter-pill ${selectedCategory === cat || (cat === 'all' && !searchParams.get('category')) ? 'active' : ''}`}
+              style={{ textTransform: 'capitalize' }}
             >
               {cat}
             </button>
@@ -128,7 +129,9 @@ const Events = () => {
                     ) : (
                       <div style={{width: '100%', height: '100%', background: '#eee', display: 'grid', placeItems: 'center', color: '#999'}}>No Image</div>
                     )}
-                    <span className="event-category">{event.category || 'Event'}</span>
+                    <span className="event-category" style={{ textTransform: 'capitalize' }}>
+                      {event.category || 'Event'}
+                    </span>
                   </div>
 
                   <div className="event-content">
