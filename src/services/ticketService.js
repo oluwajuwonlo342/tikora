@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Adjust this base URL if you have a centralized config
-const API_URL = 'http://localhost:5000/api/tickets'; 
+const API_URL = 'https://tikora-backend.onrender.com/api/api/tickets'; 
 
 const getAuthHeader = () => {
   const token = localStorage.getItem('token');
