@@ -10,14 +10,19 @@ const EventDetails = () => {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Modal and Selection State
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [preSelectedTicketId, setPreSelectedTicketId] = useState(null);
 
   const token = localStorage.getItem('token');
 
   useEffect(() => {
     const fetchEventDetails = async () => {
       try {
-        const response = await axios.get(`https://tikora-backend.onrender.com/api/events/${id}`);
+        // Automatically use your live Render URL in production, or localhost in development
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const response = await axios.get(`${apiUrl}/events/${id}`);
         setEvent(response.data.event || response.data);
       } catch (err) {
         setError('Failed to load event details.');
@@ -32,7 +37,15 @@ const EventDetails = () => {
   if (loading) return <div style={{textAlign: 'center', padding: '100px'}}><Loader size={40} /></div>;
   if (error || !event) return <div style={{textAlign: 'center', padding: '100px', color: 'red'}}>{error || 'Event not found'}</div>;
 
-const handleBuyClick = () => {
+  // Handler for clicking a specific ticket tier
+  const handleTierClick = (ticketId) => {
+    setPreSelectedTicketId(ticketId);
+    setShowPurchaseModal(true);
+  };
+
+  // Handler for the general "Get Tickets Now" button
+  const handleBuyClick = () => {
+    setPreSelectedTicketId(null);
     setShowPurchaseModal(true);
   };
 
@@ -53,7 +66,9 @@ const handleBuyClick = () => {
 
       <div className="event-layout">
         <div className="event-main">
-          <span className="event-badge">{event.category || 'Event'}</span>
+          <span className="event-badge" style={{ textTransform: 'capitalize' }}>
+            {event.category || 'Event'}
+          </span>
           <h1 className="event-title">{event.title}</h1>
           <p className="event-desc">{event.description}</p>
 
@@ -85,27 +100,45 @@ const handleBuyClick = () => {
             <div className="tier-list">
               {event.tickets?.map((tier) => {
                 const available = tier.quantity - tier.sold;
+                const isAvailable = available > 0;
+                
                 return (
-                  <div key={tier.name} className="tier-card">
+                  <div 
+                    key={tier._id || tier.name} 
+                    className="tier-card"
+                    onClick={() => isAvailable && handleTierClick(tier._id)}
+                    style={{ 
+                      cursor: isAvailable ? 'pointer' : 'not-allowed',
+                      opacity: isAvailable ? 1 : 0.6,
+                      border: '1px solid #e5e7eb',
+                      transition: 'border-color 0.2s ease, transform 0.1s ease',
+                    }}
+                    onMouseEnter={(e) => isAvailable && (e.currentTarget.style.borderColor = '#f97316')}
+                    onMouseLeave={(e) => isAvailable && (e.currentTarget.style.borderColor = '#e5e7eb')}
+                  >
                     <div className="tier-header">
                       <strong>{tier.name}</strong>
                       <span>₦{tier.price?.toLocaleString()}</span>
                     </div>
-                    <p>{available > 0 ? `${available} tickets available` : 'Sold out'}</p>
+                    <p>{isAvailable ? `${available} tickets available` : 'Sold out'}</p>
                   </div>
                 );
               })}
             </div>
 
-         <button onClick={handleBuyClick} className="btn btn-primary buy-btn">
-    Get Tickets Now
-  </button>
+            <button onClick={handleBuyClick} className="btn btn-primary buy-btn">
+              Get Tickets Now
+            </button>
           </div>
         </div>
       </div>
 
       {showPurchaseModal && (
-        <TicketPurchaseModal event={event} onClose={() => setShowPurchaseModal(false)} />
+        <TicketPurchaseModal 
+          event={event} 
+          onClose={() => setShowPurchaseModal(false)} 
+          initialTicketId={preSelectedTicketId} 
+        />
       )}
     </div>
   );
