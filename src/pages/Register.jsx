@@ -31,6 +31,15 @@ function Register() {
       return;
     }
 
+    // Enforce Password Policy: Min 8 chars, 1 number, 1 special character
+    const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*.,_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+    if (!passwordRegex.test(form.password)) {
+      alert(
+        "Password must be at least 8 characters long, containing at least one number and one special character."
+      );
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -154,7 +163,7 @@ function Register() {
               name="password"
               value={form.password}
               onChange={handleChange}
-              placeholder="Minimum 6 characters"
+              placeholder="Min 8 chars, 1 number, 1 special char"
               required
             />
           </div>
