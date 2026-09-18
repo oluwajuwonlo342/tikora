@@ -17,7 +17,7 @@ const EventDetails = () => {
   useEffect(() => {
     const fetchEventDetails = async () => {
       try {
-        const response = await axios.get(`http://localhost:5000/api/events/${id}`);
+        const response = await axios.get(`https://tikora-backend.onrender.com/api/events/${id}`);
         setEvent(response.data.event || response.data);
       } catch (err) {
         setError('Failed to load event details.');
