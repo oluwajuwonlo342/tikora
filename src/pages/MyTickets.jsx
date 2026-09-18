@@ -12,7 +12,7 @@ const MyTickets = () => {
     const fetchMyTickets = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('http://localhost:5000/api/tickets/my-tickets', {
+        const response = await axios.get('https://tikora-backend.onrender.com/api/tickets/my-tickets', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setTickets(response.data.tickets || response.data);
