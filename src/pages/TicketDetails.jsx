@@ -23,101 +23,196 @@ const TicketDetails = () => {
     fetchTicket();
   }, [id]);
 
-  if (loading) return <div className="p-8 text-center">Loading ticket...</div>;
-  if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+  if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading ticket...</div>;
+  if (error) return <div style={{ padding: '2rem', textAlign: 'center', color: '#ef4444' }}>{error}</div>;
   if (!ticket) return null;
 
   const event = ticket.event;
 
   return (
-    <div className="max-w-3xl mx-auto p-4 md:p-8">
-      <Link to="/my-tickets" className="inline-flex items-center text-blue-600 hover:underline mb-6">
-        <ArrowLeft size={20} className="mr-1" /> Back to My Tickets
+    <div style={{ maxWidth: '850px', margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui, sans-serif' }}>
+      
+      {/* Back Button */}
+      <Link 
+        to="/my-tickets" 
+        style={{ 
+          display: 'inline-flex', 
+          alignItems: 'center', 
+          color: '#2563eb', 
+          textDecoration: 'none', 
+          marginBottom: '24px',
+          fontWeight: '500'
+        }}
+      >
+        <ArrowLeft size={18} style={{ marginRight: '6px' }} /> Back to My Tickets
       </Link>
 
-      <div className="bg-white rounded-2xl shadow-lg overflow-hidden border">
+      {/* Main Ticket Card */}
+      <div style={{ 
+        backgroundColor: '#fff', 
+        borderRadius: '16px', 
+        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)', 
+        border: '1px solid #e5e7eb',
+        overflow: 'hidden'
+      }}>
+        
         {/* Header Image */}
-        <div className="h-48 w-full bg-gray-200">
-          {event?.image && <img src={event.image} alt={event.title} className="w-full h-full object-cover" />}
+        <div style={{ height: '200px', width: '100%', backgroundColor: '#f3f4f6' }}>
+          {event?.image && (
+            <img 
+              src={event.image} 
+              alt={event.title} 
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+            />
+          )}
         </div>
 
-        <div className="p-6 md:p-8 flex flex-col md:flex-row gap-8">
-          {/* Left Column: Details */}
-          <div className="flex-1 space-y-6">
+        {/* Ticket Body (Two Columns) */}
+        <div style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          gap: '32px', 
+          padding: '32px' 
+        }}>
+          
+          {/* LEFT COLUMN: Details */}
+          <div style={{ flex: '1 1 400px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            
+            {/* Title & Status */}
             <div>
-              <h1 className="text-2xl font-bold mb-2">{event?.title}</h1>
-              <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                ticket.status === 'valid' ? 'bg-green-100 text-green-800' : 
-                ticket.status === 'used' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
-              }`}>
+              <h1 style={{ fontSize: '28px', fontWeight: 'bold', margin: '0 0 12px 0', color: '#111827' }}>
+                {event?.title}
+              </h1>
+              <span style={{ 
+                display: 'inline-block',
+                padding: '6px 12px', 
+                borderRadius: '999px', 
+                fontSize: '12px', 
+                fontWeight: 'bold', 
+                textTransform: 'uppercase',
+                backgroundColor: ticket.status === 'valid' ? '#dcfce7' : ticket.status === 'used' ? '#f3f4f6' : '#fee2e2',
+                color: ticket.status === 'valid' ? '#166534' : ticket.status === 'used' ? '#374151' : '#991b1b'
+              }}>
                 Status: {ticket.status}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              <div className="flex items-start">
-                <Calendar className="mr-3 text-gray-400 mt-1" size={20} />
+            {/* Icon Details Grid */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <Calendar color="#9ca3af" size={22} style={{ marginTop: '2px' }} />
                 <div>
-                  <p className="text-sm text-gray-500">Date & Time</p>
-                  <p className="font-medium">{new Date(event?.date).toLocaleString()}</p>
+                  <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#6b7280' }}>Date & Time</p>
+                  <p style={{ margin: 0, fontWeight: '500', color: '#1f2937' }}>
+                    {new Date(event?.date).toLocaleString('en-NG', {
+                      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                    })}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-start">
-                <MapPin className="mr-3 text-gray-400 mt-1" size={20} />
+              
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <MapPin color="#9ca3af" size={22} style={{ marginTop: '2px' }} />
                 <div>
-                  <p className="text-sm text-gray-500">Venue</p>
-                  <p className="font-medium">{event?.venue}</p>
-                  <p className="text-sm text-gray-600">{event?.location}</p>
+                  <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#6b7280' }}>Venue</p>
+                  <p style={{ margin: 0, fontWeight: '500', color: '#1f2937' }}>{event?.venue}</p>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '14px', color: '#4b5563' }}>{event?.location}</p>
                 </div>
               </div>
-              <div className="flex items-start">
-                <User className="mr-3 text-gray-400 mt-1" size={20} />
+              
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <User color="#9ca3af" size={22} style={{ marginTop: '2px' }} />
                 <div>
-                  <p className="text-sm text-gray-500">Ticket Holder</p>
-                  <p className="font-medium">{ticket.buyer?.name}</p>
-                  <p className="text-sm text-gray-600">{ticket.buyer?.email}</p>
+                  <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#6b7280' }}>Ticket Holder</p>
+                  <p style={{ margin: 0, fontWeight: '500', color: '#1f2937', textTransform: 'capitalize' }}>
+                    {ticket.buyer?.name}
+                  </p>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '14px', color: '#4b5563' }}>{ticket.buyer?.email}</p>
                 </div>
               </div>
+
             </div>
 
             {/* Financial Breakdown */}
-            <div className="bg-gray-50 p-4 rounded-lg mt-6 border">
-              <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center">
-                <Receipt size={16} className="mr-2" /> Payment Summary
+            <div style={{ 
+              backgroundColor: '#f9fafb', 
+              padding: '20px', 
+              borderRadius: '12px', 
+              marginTop: '16px',
+              border: '1px solid #e5e7eb' 
+            }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: '#374151', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Receipt size={18} /> Payment Summary
               </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Ticket Price ({ticket.ticketType})</span>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563' }}>
+                  <span>Ticket Price ({ticket.ticketType})</span>
                   <span>₦{ticket.ticketPrice?.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Platform Fee (7%)</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4b5563' }}>
+                  <span>Platform Fee (7%)</span>
                   <span>₦{ticket.platformFee?.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between pt-2 border-t font-bold text-lg">
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #d1d5db', paddingTop: '12px', marginTop: '4px', fontWeight: 'bold', fontSize: '16px', color: '#111827' }}>
                   <span>Total Paid</span>
                   <span>₦{ticket.totalAmount?.toLocaleString()}</span>
                 </div>
-                <div className="text-xs text-gray-400 mt-2">
+                
+                <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px' }}>
                   Ref: {ticket.paymentReference}
                 </div>
               </div>
             </div>
+
           </div>
 
-          {/* Right Column: QR Code */}
-          <div className="w-full md:w-64 flex flex-col items-center justify-center p-6 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-            <h3 className="font-bold text-gray-700 mb-4 text-center">Scan at Entry</h3>
-            <div className="bg-white p-2 rounded-lg shadow-sm mb-4">
-              <img src={ticket.qrCode} alt="Ticket QR Code" className="w-48 h-48" />
+          {/* RIGHT COLUMN: QR Code */}
+          <div style={{ 
+            flex: '1 1 250px', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            padding: '32px 24px', 
+            backgroundColor: '#f8fafc', 
+            borderRadius: '16px', 
+            border: '2px dashed #cbd5e1' 
+          }}>
+            <h3 style={{ fontWeight: 'bold', color: '#334155', margin: '0 0 20px 0', textAlign: 'center' }}>
+              Scan at Entry
+            </h3>
+            
+            <div style={{ backgroundColor: '#fff', padding: '12px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', marginBottom: '20px' }}>
+              <img 
+                src={ticket.qrCode} 
+                alt="Ticket QR Code" 
+                style={{ width: '180px', height: '180px', objectFit: 'contain' }} 
+              />
             </div>
-            <p className="font-mono font-bold text-lg tracking-wider text-center bg-gray-200 px-4 py-2 rounded">
+            
+            <p style={{ 
+              fontFamily: 'monospace', 
+              fontWeight: 'bold', 
+              fontSize: '16px', 
+              letterSpacing: '2px', 
+              textAlign: 'center', 
+              backgroundColor: '#e2e8f0', 
+              padding: '8px 16px', 
+              borderRadius: '6px',
+              margin: '0 0 16px 0',
+              color: '#0f172a'
+            }}>
               {ticket.ticketCode}
             </p>
-            <p className="text-xs text-gray-500 text-center mt-4">
-              Do not share this QR code. It can only be scanned once.
+            
+            <p style={{ fontSize: '12px', color: '#64748b', textAlign: 'center', margin: 0, lineHeight: '1.5' }}>
+              Do not share this QR code.<br/>It can only be scanned once.
             </p>
           </div>
+
         </div>
       </div>
     </div>
