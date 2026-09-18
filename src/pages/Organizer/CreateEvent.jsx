@@ -238,46 +238,16 @@ function CreateEvent() {
 
                 <label>
                   Category
-                </label>
-
-                <select
-                  name="category"
-                  value={formData.category}
-                  onChange={handleChange}
-                >
-                  <option value="music">
-                    Music & Concerts
-                  </option>
-
-                  <option value="party">
-                    Party & Nightlife
-                  </option>
-
-                  <option value="business">
-                    Business & Tech
-                  </option>
-
-                  <option value="arts">
-                    Arts & Culture
-                  </option>
-
-                  <option value="sports">
-                    Sports & Fitness
-                  </option>
-
-                  <option value="education">
-                    Education
-                  </option>
-
-                  <option value="festival">
-                    Festival
-                  </option>
-
-                  <option value="other">
-                    Other
-                  </option>
-
-                </select>
+                </label>// Change lowercase values to Title Case (or exact casing in your Event model):
+<select name="category" value={formData.category} onChange={handleChange}>
+  <option value="Party">Party</option>
+  <option value="Music">Music</option>
+  <option value="Business">Business</option>
+  <option value="Arts">Arts</option>
+  <option value="Sports">Sports</option>
+  <option value="Education">Education</option>
+  <option value="Festival">Festival</option>
+</select>
 
               </div>
 
