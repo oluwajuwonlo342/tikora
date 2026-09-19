@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Loader, Ticket, CreditCard, User, ArrowRight, ArrowLeft } from 'lucide-react';
 import { initializePurchase } from '../services/ticketService';
 
-const TicketPurchaseModal = ({ event, onClose }) => {
+const TicketPurchaseModal = ({ event, onClose, initialTicketId }) => {
   const [step, setStep] = useState(1);
   const [selectedTicket, setSelectedTicket] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -16,6 +16,18 @@ const TicketPurchaseModal = ({ event, onClose }) => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Automatically select the pre-clicked ticket tier if passed from EventDetails
+  useEffect(() => {
+    if (initialTicketId && event?.tickets) {
+      const matchedTier = event.tickets.find(t => t._id === initialTicketId || t.name === initialTicketId);
+      if (matchedTier) {
+        setSelectedTicket(matchedTier.name);
+      }
+    } else if (event?.tickets?.length > 0 && !selectedTicket) {
+      setSelectedTicket(event.tickets[0].name);
+    }
+  }, [initialTicketId, event]);
 
   const ticketTier = event?.tickets?.find((t) => t.name === selectedTicket);
   const subtotal = ticketTier ? ticketTier.price * quantity : 0;
@@ -123,7 +135,7 @@ const TicketPurchaseModal = ({ event, onClose }) => {
         width: '100%', 
         display: 'flex', 
         flexDirection: 'column', 
-        maxHeight: '90vh', /* Strict modal height constraint */
+        maxHeight: '90vh', 
         overflow: 'hidden' 
       }}>
         
@@ -153,28 +165,26 @@ const TicketPurchaseModal = ({ event, onClose }) => {
               <>
                 <div className="input-group">
                   <label>Select Ticket Tier</label>
-              <select 
-  value={selectedTicket} 
-  onChange={(e) => setSelectedTicket(e.target.value)}
->
-  <option value="" disabled>-- Choose a ticket type --</option>
-  {event.tickets.map(ticket => (
-    <option key={ticket._id} value={ticket.name}>
-      {/* Removed the available count parentheses here */}
-      {ticket.name} - ₦{ticket.price?.toLocaleString()}
-    </option>
-  ))}
-</select>
+                  <select value={selectedTicket} onChange={(e) => setSelectedTicket(e.target.value)} required>
+                    <option value="" disabled>-- Choose a ticket type --</option>
+                    {event.tickets.map(tier => {
+                      const available = tier.quantity - tier.sold;
+                      return (
+                        <option key={tier.name} value={tier.name} disabled={available <= 0}>
+                          {/* Clean dropdown label without available count */}
+                          {tier.name} - ₦{tier.price.toLocaleString()} {available <= 0 ? '(Sold Out)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
 
                 {ticketTier && (
                   <div className="input-group">
-                    {/* Updated label to 100 */}
                     <label>Quantity (Max 100)</label>
                     <input 
                       type="number" 
                       min="1" 
-                      // Updated Math.min from 10 to 100
                       max={Math.min(100, ticketTier.quantity - ticketTier.sold)} 
                       value={quantity} 
                       onChange={(e) => handleQuantityChange(Number(e.target.value))}
