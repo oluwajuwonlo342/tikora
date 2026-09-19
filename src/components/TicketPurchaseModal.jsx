@@ -153,17 +153,18 @@ const TicketPurchaseModal = ({ event, onClose }) => {
               <>
                 <div className="input-group">
                   <label>Select Ticket Tier</label>
-                  <select value={selectedTicket} onChange={(e) => setSelectedTicket(e.target.value)} required>
-                    <option value="" disabled>-- Choose a ticket type --</option>
-                    {event.tickets.map(tier => {
-                      const available = tier.quantity - tier.sold;
-                      return (
-                        <option key={tier.name} value={tier.name} disabled={available <= 0}>
-                          {tier.name} - ₦{tier.price.toLocaleString()} {available > 0 ? `(${available} left)` : '(Sold Out)'}
-                        </option>
-                      );
-                    })}
-                  </select>
+              <select 
+  value={selectedTicket} 
+  onChange={(e) => setSelectedTicket(e.target.value)}
+>
+  <option value="" disabled>-- Choose a ticket type --</option>
+  {event.tickets.map(ticket => (
+    <option key={ticket._id} value={ticket.name}>
+      {/* Removed the available count parentheses here */}
+      {ticket.name} - ₦{ticket.price?.toLocaleString()}
+    </option>
+  ))}
+</select>
                 </div>
 
                 {ticketTier && (
