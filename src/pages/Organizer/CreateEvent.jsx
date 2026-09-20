@@ -153,13 +153,12 @@ function CreateEvent() {
           `/events/${response.data.event._id}`
         );
       }
-    } catch (error) {
+    } } catch (error) {
       console.error("Create event error:", error);
 
-      alert(
-        error.response?.data?.message ||
-          "Unable to create event."
-      );
+      // ✅ This will display the exact error from the server on your phone screen
+      const serverMessage = error.response?.data?.message || error.response?.data?.error || error.message;
+      alert(`Mobile Error: ${serverMessage}`);
     } finally {
       setLoading(false);
     }
