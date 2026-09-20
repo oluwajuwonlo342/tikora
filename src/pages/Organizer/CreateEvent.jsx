@@ -15,9 +15,7 @@ function CreateEvent() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
-
   const [image, setImage] = useState(null);
-
   const [preview, setPreview] = useState("");
 
   const [formData, setFormData] = useState({
@@ -40,7 +38,6 @@ function CreateEvent() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -48,8 +45,7 @@ function CreateEvent() {
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-
+    const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
@@ -58,7 +54,6 @@ function CreateEvent() {
     }
 
     setImage(file);
-
     setPreview(URL.createObjectURL(file));
   };
 
@@ -75,10 +70,7 @@ function CreateEvent() {
 
   const removeTicket = (index) => {
     if (tickets.length === 1) return;
-
-    setTickets((prev) =>
-      prev.filter((_, i) => i !== index)
-    );
+    setTickets((prev) => prev.filter((_, i) => i !== index));
   };
 
   const updateTicket = (index, field, value) => {
@@ -111,10 +103,8 @@ function CreateEvent() {
       setLoading(true);
 
       const data = new FormData();
-
       data.append("title", formData.title);
       data.append("description", formData.description);
-      // Ensure category is sent in lowercase to match backend validation
       data.append("category", formData.category.toLowerCase());
       data.append("date", formData.date);
       data.append("endDate", formData.endDate);
@@ -136,28 +126,22 @@ function CreateEvent() {
 
       const token = localStorage.getItem("token");
 
-      const response = await api.post(
-        "/events",
-        data,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await api.post("/events", data, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (response.data.success) {
         alert("Event created successfully!");
-
-        navigate(
-          `/events/${response.data.event._id}`
-        );
+        navigate(`/events/${response.data.event._id}`);
       }
-    } } catch (error) {
+    } catch (error) {
       console.error("Create event error:", error);
-
-      // ✅ This will display the exact error from the server on your phone screen
-      const serverMessage = error.response?.data?.message || error.response?.data?.error || error.message;
+      const serverMessage =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message;
       alert(`Mobile Error: ${serverMessage}`);
     } finally {
       setLoading(false);
@@ -166,63 +150,33 @@ function CreateEvent() {
 
   return (
     <main className="create-event-page">
-
       <div className="container">
-
-        <Link
-          to="/dashboard"
-          className="back-link"
-        >
+        <Link to="/dashboard" className="back-link">
           <ArrowLeft size={17} />
           Back to dashboard
         </Link>
 
         <div className="create-event-header">
-
           <div>
-            <span className="page-label">
-              ORGANIZER
-            </span>
-
+            <span className="page-label">ORGANIZER</span>
             <h1>Create your event</h1>
-
-            <p>
-              Tell people what makes your event worth
-              experiencing.
-            </p>
+            <p>Tell people what makes your event worth experiencing.</p>
           </div>
-
         </div>
 
-        <form
-          className="event-form"
-          onSubmit={handleSubmit}
-        >
-
+        <form className="event-form" onSubmit={handleSubmit}>
           {/* BASIC INFORMATION */}
-
           <section className="form-section">
-
             <div className="form-section-title">
-
               <div>
                 <h2>Event information</h2>
-
-                <p>
-                  Give your event a great first impression.
-                </p>
+                <p>Give your event a great first impression.</p>
               </div>
-
             </div>
 
             <div className="form-grid">
-
               <div className="form-group full">
-
-                <label>
-                  Event title
-                </label>
-
+                <label>Event title</label>
                 <input
                   type="text"
                   name="title"
@@ -231,22 +185,23 @@ function CreateEvent() {
                   placeholder="e.g. Afrobeat Summer Night"
                   required
                 />
-
               </div>
 
               <div className="form-group">
-
-                <label>
-                  Category
-                </label>
-
-                {/* ✅ Replaced text input with a lowercase value select dropdown */}
+                <label>Category</label>
                 <select
                   name="category"
                   value={formData.category}
                   onChange={handleChange}
                   required
-                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #ddd', background: '#fff', fontSize: '15px' }}
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    borderRadius: "10px",
+                    border: "1px solid #ddd",
+                    background: "#fff",
+                    fontSize: "15px",
+                  }}
                 >
                   <option value="music">Music</option>
                   <option value="party">Party</option>
@@ -256,15 +211,10 @@ function CreateEvent() {
                   <option value="education">Education</option>
                   <option value="festival">Festival</option>
                 </select>
-
               </div>
 
               <div className="form-group full">
-
-                <label>
-                  Description
-                </label>
-
+                <label>Description</label>
                 <textarea
                   name="description"
                   value={formData.description}
@@ -273,92 +223,54 @@ function CreateEvent() {
                   rows="6"
                   required
                 />
-
               </div>
-
             </div>
-
           </section>
 
-
           {/* IMAGE */}
-
           <section className="form-section">
-
             <div className="form-section-title">
-
               <div>
                 <h2>Event poster</h2>
-
-                <p>
-                  Use a high-quality image to attract
-                  attendees.
-                </p>
+                <p>Use a high-quality image to attract attendees.</p>
               </div>
-
             </div>
 
-            <label className="image-upload">
-
+            <label className="image-upload" style={{ cursor: "pointer" }}>
               {preview ? (
-                <img
-                  src={preview}
-                  alt="Event preview"
-                />
+                <img src={preview} alt="Event preview" />
               ) : (
                 <div className="upload-placeholder">
-
                   <div className="upload-icon">
                     <Upload size={25} />
                   </div>
-
-                  <strong>
-                    Upload event poster
-                  </strong>
-
-                  <span>
-                    PNG, JPG or JPEG • Maximum 5MB
-                  </span>
-
+                  <strong>Upload event poster</strong>
+                  <span>PNG, JPG or JPEG • Maximum 5MB</span>
                 </div>
               )}
-
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/jpg"
                 onChange={handleImageChange}
+                style={{ display: "none" }}
               />
-
             </label>
-
           </section>
 
-
           {/* DATE & LOCATION */}
-
           <section className="form-section">
-
             <div className="form-section-title">
-
               <div>
                 <h2>Date & location</h2>
-
-                <p>
-                  Where and when is your event happening?
-                </p>
+                <p>Where and when is your event happening?</p>
               </div>
-
             </div>
 
             <div className="form-grid">
-
               <div className="form-group">
-
                 <label>
-                  <CalendarDays size={15} />
-                  Event date
+                  <CalendarDays size={15} /> Event date
                 </label>
-
                 <input
                   type="datetime-local"
                   name="date"
@@ -366,32 +278,24 @@ function CreateEvent() {
                   onChange={handleChange}
                   required
                 />
-
               </div>
 
               <div className="form-group">
-
                 <label>
-                  <CalendarDays size={15} />
-                  End date
+                  <CalendarDays size={15} /> End date
                 </label>
-
                 <input
                   type="datetime-local"
                   name="endDate"
                   value={formData.endDate}
                   onChange={handleChange}
                 />
-
               </div>
 
               <div className="form-group">
-
                 <label>
-                  <MapPin size={15} />
-                  Venue
+                  <MapPin size={15} /> Venue
                 </label>
-
                 <input
                   type="text"
                   name="venue"
@@ -400,16 +304,12 @@ function CreateEvent() {
                   placeholder="Eko Hotel"
                   required
                 />
-
               </div>
 
               <div className="form-group">
-
                 <label>
-                  <MapPin size={15} />
-                  Location
+                  <MapPin size={15} /> Location
                 </label>
-
                 <input
                   type="text"
                   name="location"
@@ -418,27 +318,16 @@ function CreateEvent() {
                   placeholder="Victoria Island, Lagos"
                   required
                 />
-
               </div>
-
             </div>
-
           </section>
 
-
           {/* TICKETS */}
-
           <section className="form-section">
-
             <div className="form-section-title">
-
               <div>
                 <h2>Ticket types</h2>
-
-                <p>
-                  Create different ticket options
-                  for your attendees.
-                </p>
+                <p>Create different ticket options for your attendees.</p>
               </div>
 
               <button
@@ -446,138 +335,83 @@ function CreateEvent() {
                 className="add-ticket-btn"
                 onClick={addTicket}
               >
-                <Plus size={17} />
-                Add ticket
+                <Plus size={17} /> Add ticket
               </button>
-
             </div>
 
-
             <div className="ticket-builder">
-
               {tickets.map((ticket, index) => (
-
-                <div
-                  className="ticket-row"
-                  key={index}
-                >
-
+                <div className="ticket-row" key={index}>
                   <div className="ticket-number">
                     <Ticket size={17} />
                   </div>
 
                   <div className="form-group">
-
-                    <label>
-                      Ticket name
-                    </label>
-
+                    <label>Ticket name</label>
                     <input
                       type="text"
                       value={ticket.name}
                       onChange={(e) =>
-                        updateTicket(
-                          index,
-                          "name",
-                          e.target.value
-                        )
+                        updateTicket(index, "name", e.target.value)
                       }
                       placeholder="Regular"
                       required
                     />
-
                   </div>
 
                   <div className="form-group">
-
-                    <label>
-                      Price (₦)
-                    </label>
-
+                    <label>Price (₦)</label>
                     <input
                       type="number"
                       min="0"
                       value={ticket.price}
                       onChange={(e) =>
-                        updateTicket(
-                          index,
-                          "price",
-                          e.target.value
-                        )
+                        updateTicket(index, "price", e.target.value)
                       }
                       placeholder="5000"
                       required
                     />
-
                   </div>
 
                   <div className="form-group">
-
-                    <label>
-                      Quantity
-                    </label>
-
+                    <label>Quantity</label>
                     <input
                       type="number"
                       min="1"
                       value={ticket.quantity}
                       onChange={(e) =>
-                        updateTicket(
-                          index,
-                          "quantity",
-                          e.target.value
-                        )
+                        updateTicket(index, "quantity", e.target.value)
                       }
                       placeholder="500"
                       required
                     />
-
                   </div>
 
                   <button
                     type="button"
                     className="delete-ticket"
-                    onClick={() =>
-                      removeTicket(index)
-                    }
+                    onClick={() => removeTicket(index)}
                   >
                     <Trash2 size={18} />
                   </button>
-
                 </div>
-
               ))}
-
             </div>
-
           </section>
 
-
           {/* SUBMIT */}
-
           <div className="form-submit">
-
-            <p>
-              Your event will be published immediately
-              after creation.
-            </p>
-
+            <p>Your event will be published immediately after creation.</p>
             <button
               type="submit"
               className="btn btn-primary publish-btn"
               disabled={loading}
             >
-              {loading
-                ? "Publishing..."
-                : "Publish Event"}
+              {loading ? "Publishing..." : "Publish Event"}
             </button>
-
           </div>
-
         </form>
-
       </div>
-
     </main>
   );
 }
