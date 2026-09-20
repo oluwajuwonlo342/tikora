@@ -114,7 +114,8 @@ function CreateEvent() {
 
       data.append("title", formData.title);
       data.append("description", formData.description);
-      data.append("category", formData.category);
+      // Ensure category is sent in lowercase to match backend validation
+      data.append("category", formData.category.toLowerCase());
       data.append("date", formData.date);
       data.append("endDate", formData.endDate);
       data.append("venue", formData.venue);
@@ -238,16 +239,24 @@ function CreateEvent() {
 
                 <label>
                   Category
-                </label>// Change lowercase values to Title Case (or exact casing in your Event model):
-<select name="category" value={formData.category} onChange={handleChange}>
-  <option value="Party">Party</option>
-  <option value="Music">Music</option>
-  <option value="Business">Business</option>
-  <option value="Arts">Arts</option>
-  <option value="Sports">Sports</option>
-  <option value="Education">Education</option>
-  <option value="Festival">Festival</option>
-</select>
+                </label>
+
+                {/* ✅ Replaced text input with a lowercase value select dropdown */}
+                <select
+                  name="category"
+                  value={formData.category}
+                  onChange={handleChange}
+                  required
+                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #ddd', background: '#fff', fontSize: '15px' }}
+                >
+                  <option value="music">Music</option>
+                  <option value="party">Party</option>
+                  <option value="business">Business</option>
+                  <option value="arts">Arts</option>
+                  <option value="sports">Sports</option>
+                  <option value="education">Education</option>
+                  <option value="festival">Festival</option>
+                </select>
 
               </div>
 
@@ -573,5 +582,7 @@ function CreateEvent() {
     </main>
   );
 }
+
+CreateEvent.displayName = "CreateEvent";
 
 export default CreateEvent;
