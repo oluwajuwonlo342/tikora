@@ -20,7 +20,6 @@ const EventDetails = () => {
   useEffect(() => {
     const fetchEventDetails = async () => {
       try {
-        // Automatically use your live Render URL in production, or localhost in development
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
         const response = await axios.get(`${apiUrl}/events/${id}`);
         setEvent(response.data.event || response.data);
@@ -120,7 +119,7 @@ const EventDetails = () => {
                       <strong>{tier.name}</strong>
                       <span>₦{tier.price?.toLocaleString()}</span>
                     </div>
-                   
+                    {/* Available count display removed completely */}
                   </div>
                 );
               })}
