@@ -120,7 +120,7 @@ const EventDetails = () => {
                       <strong>{tier.name}</strong>
                       <span>₦{tier.price?.toLocaleString()}</span>
                     </div>
-                    <p>{isAvailable ? `${available} tickets available` : 'Sold out'}</p>
+                   
                   </div>
                 );
               })}
