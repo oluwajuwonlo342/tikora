@@ -19,6 +19,10 @@ const Wallet = () => {
   // State to track which event the organizer is currently withdrawing from
   const [selectedEventForPayout, setSelectedEventForPayout] = useState(null);
 
+  // ✅ Pagination State for Transactions
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   const fetchRevenueData = async () => {
     try {
       setLoading(true);
@@ -55,6 +59,20 @@ const Wallet = () => {
   useEffect(() => {
     fetchRevenueData();
   }, []);
+
+  // ✅ Pagination Calculations
+  const totalPages = Math.ceil((revenueData.transactions?.length || 0) / itemsPerPage);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentTransactions = revenueData.transactions?.slice(indexOfFirstItem, indexOfLastItem) || [];
+
+  const handlePrev = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const handleNext = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+  };
 
   if (loading) {
     return (
@@ -173,7 +191,7 @@ const Wallet = () => {
         )}
       </div>
 
-      {/* ✅ NEW: TRANSACTION HISTORY TABLE */}
+      {/* TRANSACTION HISTORY TABLE WITH PAGINATION */}
       <div style={{ marginTop: '40px', background: 'white', padding: '30px', borderRadius: '16px', border: '1px solid #eee' }}>
         <h3 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '20px', marginBottom: '20px' }}>Transaction History</h3>
         <div style={{ overflowX: 'auto' }}>
@@ -188,7 +206,7 @@ const Wallet = () => {
               </tr>
             </thead>
             <tbody>
-              {revenueData.transactions?.map((tx) => (
+              {currentTransactions.map((tx) => (
                 <tr key={tx.id} style={{ borderBottom: '1px solid #eee' }}>
                   <td style={{ padding: '15px', color: '#555', fontSize: '14px' }}>
                     {new Date(tx.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -229,6 +247,47 @@ const Wallet = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #eee' }}>
+            <button 
+              onClick={handlePrev} 
+              disabled={currentPage === 1}
+              style={{ 
+                padding: '8px 16px', 
+                borderRadius: '6px', 
+                border: '1px solid #ddd', 
+                background: 'white', 
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                opacity: currentPage === 1 ? 0.5 : 1,
+                fontWeight: '600'
+              }}
+            >
+              ← Previous
+            </button>
+            
+            <span style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
+              Page {currentPage} of {totalPages}
+            </span>
+
+            <button 
+              onClick={handleNext} 
+              disabled={currentPage === totalPages}
+              style={{ 
+                padding: '8px 16px', 
+                borderRadius: '6px', 
+                border: '1px solid #ddd', 
+                background: 'white', 
+                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                opacity: currentPage === totalPages ? 0.5 : 1,
+                fontWeight: '600'
+              }}
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </div>
       
     </div>
