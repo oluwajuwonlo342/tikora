@@ -1,7 +1,6 @@
 import { Loader, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
-// ✅ THIS IMPORTS THE NEW FORM COMPONENT WE BUILT
 import PayoutRequestForm from '../../components/PayoutRequestForm';
 
 const Wallet = () => {
@@ -12,14 +11,13 @@ const Wallet = () => {
     netPayout: 0,
     ticketsSold: 0,
     eventsList: [],
-    transactions: [] // ✅ Added transactions to state
+    transactions: []
   });
   const [error, setError] = useState('');
   
-  // State to track which event the organizer is currently withdrawing from
   const [selectedEventForPayout, setSelectedEventForPayout] = useState(null);
 
-  // ✅ Pagination State for Transactions
+  // Pagination State for Transactions
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -31,12 +29,11 @@ const Wallet = () => {
       if (response.data.success) {
         const stats = response.data.stats;
         const events = response.data.events || [];
-        const transactions = response.data.transactions || []; // ✅ Extract transactions from backend
+        const transactions = response.data.transactions || [];
         
-        // Use the new backend variables (totalGrossEarned and totalRevenue) if available
         const gross = stats.totalGrossEarned || stats.totalRevenue || 0;
         const fees = gross * 0.07; 
-        const net = stats.totalRevenue || (gross - fees); // backend totalRevenue now represents available balance
+        const net = stats.totalRevenue || (gross - fees);
 
         setRevenueData({
           totalRevenue: gross,
@@ -45,7 +42,7 @@ const Wallet = () => {
           ticketsSold: stats.totalTicketsSold || 0,
           eventsCount: stats.totalEvents || 0,
           eventsList: events,
-          transactions: transactions // ✅ Save to state
+          transactions: transactions
         });
       }
     } catch (err) {
@@ -60,7 +57,6 @@ const Wallet = () => {
     fetchRevenueData();
   }, []);
 
-  // ✅ Pagination Calculations
   const totalPages = Math.ceil((revenueData.transactions?.length || 0) / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -91,7 +87,7 @@ const Wallet = () => {
         <div className="wallet-hero-left">
           <span style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', color: '#ff5a36' }}>Organizer Wallet & Earnings</span>
           <h1 style={{ fontSize: '48px', margin: '10px 0' }}>₦{revenueData.netPayout.toLocaleString()}</h1>
-          <p style={{ color: '#aaa', fontSize: '14px' }}>Available Net Payout (After 7% Platform Fee & Withdrawals)</p>
+          <p style={{ color: '#aaa', fontSize: '14px' }}>Available Net Payout (Organizer Earnings After Withdrawals)</p>
         </div>
       </div>
 
@@ -100,13 +96,13 @@ const Wallet = () => {
       {/* Metric Cards */}
       <div className="wallet-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '40px' }}>
         <div className="wallet-card" style={{ padding: '25px', background: 'white', borderRadius: '12px', border: '1px solid #eee' }}>
-          <span style={{ color: '#666', fontSize: '14px' }}>Gross Revenue</span>
+          <span style={{ color: '#666', fontSize: '14px' }}>Organizer Total Earnings</span>
           <h3 style={{ color: '#111', fontSize: '24px', marginTop: '10px' }}>₦{revenueData.totalRevenue.toLocaleString()}</h3>
         </div>
 
         <div className="wallet-card" style={{ padding: '25px', background: 'white', borderRadius: '12px', border: '1px solid #eee' }}>
-          <span style={{ color: '#666', fontSize: '14px' }}>Platform Fees (7%)</span>
-          <h3 style={{ color: '#e65100', fontSize: '24px', marginTop: '10px' }}>- ₦{revenueData.platformFees.toLocaleString()}</h3>
+          <span style={{ color: '#666', fontSize: '14px' }}>Platform Fees Paid by Buyers</span>
+          <h3 style={{ color: '#e65100', fontSize: '24px', marginTop: '10px' }}>₦{revenueData.platformFees.toLocaleString()}</h3>
         </div>
 
         <div className="wallet-card" style={{ padding: '25px', background: 'white', borderRadius: '12px', border: '1px solid #eee' }}>
@@ -130,10 +126,10 @@ const Wallet = () => {
           
           <PayoutRequestForm 
             eventId={selectedEventForPayout._id} 
-            availableBalance={selectedEventForPayout.eventRevenue - (selectedEventForPayout.eventRevenue * 0.07)} 
+            availableBalance={selectedEventForPayout.eventRevenue} 
             onSuccess={() => {
               setSelectedEventForPayout(null);
-              fetchRevenueData(); // Refresh the stats after requesting
+              fetchRevenueData();
             }}
           />
         </div>
@@ -158,7 +154,8 @@ const Wallet = () => {
               </thead>
               <tbody>
                 {revenueData.eventsList?.map((evt) => {
-                  const netEventRevenue = evt.eventRevenue - (evt.eventRevenue * 0.07);
+                  // ✅ Fixed: Use evt.eventRevenue directly without deducting 7% a second time
+                  const netEventRevenue = evt.eventRevenue;
                   
                   return (
                     <tr key={evt._id} style={{ borderBottom: '1px solid #eee' }}>
