@@ -80,13 +80,65 @@ const Wallet = () => {
   }
 
   return (
-    <div className="container wallet-page" style={{ padding: '40px 20px' }}>
+    <div className="container wallet-page" style={{ padding: '30px 15px', maxWidth: '1200px', margin: '0 auto' }}>
       
+      {/* Responsive Styles Injection */}
+      <style>{`
+        .wallet-hero {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: #111;
+          color: white;
+          padding: 40px;
+          border-radius: 16px;
+          margin-bottom: 30px;
+        }
+        .wallet-hero h1 {
+          font-size: 48px;
+          margin: 10px 0;
+        }
+        .wallet-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          gap: 20px;
+          margin-bottom: 40px;
+        }
+        .wallet-card {
+          padding: 25px;
+          background: white;
+          border-radius: 12px;
+          border: 1px solid #eee;
+        }
+        .table-responsive-wrapper {
+          width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          background: white;
+          border-radius: 12px;
+          border: 1px solid #eee;
+        }
+
+        @media (max-width: 768px) {
+          .wallet-hero {
+            padding: 25px 20px;
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          .wallet-hero h1 {
+            font-size: 36px;
+          }
+          .wallet-card {
+            padding: 20px;
+          }
+        }
+      `}</style>
+
       {/* Hero Banner */}
-      <div className="wallet-hero" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#111', color: 'white', padding: '40px', borderRadius: '16px', marginBottom: '30px' }}>
+      <div className="wallet-hero">
         <div className="wallet-hero-left">
-          <span style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', color: '#ff5a36' }}>Organizer Wallet & Earnings</span>
-          <h1 style={{ fontSize: '48px', margin: '10px 0' }}>₦{revenueData.netPayout.toLocaleString()}</h1>
+          <span style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', color: '#ff5a36', fontWeight: '600' }}>Organizer Wallet & Earnings</span>
+          <h1>₦{revenueData.netPayout.toLocaleString()}</h1>
           <p style={{ color: '#aaa', fontSize: '14px' }}>Available Net Payout (Organizer Earnings After Withdrawals)</p>
         </div>
       </div>
@@ -94,18 +146,18 @@ const Wallet = () => {
       {error && <div style={{ color: '#d33', background: '#fff0f0', padding: '15px', borderRadius: '12px', marginBottom: '25px' }}>{error}</div>}
 
       {/* Metric Cards */}
-      <div className="wallet-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '40px' }}>
-        <div className="wallet-card" style={{ padding: '25px', background: 'white', borderRadius: '12px', border: '1px solid #eee' }}>
+      <div className="wallet-grid">
+        <div className="wallet-card">
           <span style={{ color: '#666', fontSize: '14px' }}>Organizer Total Earnings</span>
           <h3 style={{ color: '#111', fontSize: '24px', marginTop: '10px' }}>₦{revenueData.totalRevenue.toLocaleString()}</h3>
         </div>
 
-        <div className="wallet-card" style={{ padding: '25px', background: 'white', borderRadius: '12px', border: '1px solid #eee' }}>
+        <div className="wallet-card">
           <span style={{ color: '#666', fontSize: '14px' }}>Platform Fees Paid by Buyers</span>
           <h3 style={{ color: '#e65100', fontSize: '24px', marginTop: '10px' }}>₦{revenueData.platformFees.toLocaleString()}</h3>
         </div>
 
-        <div className="wallet-card" style={{ padding: '25px', background: 'white', borderRadius: '12px', border: '1px solid #eee' }}>
+        <div className="wallet-card">
           <span style={{ color: '#666', fontSize: '14px' }}>Total Tickets Sold</span>
           <h3 style={{ color: 'var(--primary)', fontSize: '24px', marginTop: '10px' }}>{revenueData.ticketsSold.toLocaleString()}</h3>
         </div>
@@ -113,7 +165,7 @@ const Wallet = () => {
 
       {/* Dynamic Payout Form Injection */}
       {selectedEventForPayout && (
-        <div style={{ marginBottom: '40px', padding: '20px', border: '2px dashed var(--primary)', borderRadius: '16px', position: 'relative' }}>
+        <div style={{ marginBottom: '40px', padding: '20px', border: '2px dashed var(--primary)', borderRadius: '16px', position: 'relative', background: '#fff' }}>
           <button 
             onClick={() => setSelectedEventForPayout(null)}
             style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#666' }}
@@ -121,8 +173,8 @@ const Wallet = () => {
             <X size={24} />
           </button>
           
-          <h3 style={{ marginBottom: '5px' }}>Withdraw Funds for: {selectedEventForPayout.title}</h3>
-          <p style={{ color: '#666', marginBottom: '20px' }}>Please provide your bank details below to receive your earnings.</p>
+          <h3 style={{ marginBottom: '5px', fontSize: '18px' }}>Withdraw Funds for: {selectedEventForPayout.title}</h3>
+          <p style={{ color: '#666', marginBottom: '20px', fontSize: '14px' }}>Please provide your bank details below to receive your earnings.</p>
           
           <PayoutRequestForm 
             eventId={selectedEventForPayout._id} 
@@ -136,44 +188,44 @@ const Wallet = () => {
       )}
 
       {/* Event Revenue Breakdown Table */}
-      <div className="transactions-section">
-        <h2 style={{ marginBottom: '20px' }}>Event Revenue Breakdown</h2>
+      <div className="transactions-section" style={{ marginBottom: '40px' }}>
+        <h2 style={{ marginBottom: '20px', fontSize: '22px', fontFamily: 'Space Grotesk, sans-serif' }}>Event Revenue Breakdown</h2>
         
         {revenueData.eventsList?.length === 0 ? (
           <p style={{ color: '#777', fontSize: '14px' }}>No revenue records found yet.</p>
         ) : (
-          <div className="table-responsive" style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
-            <table className="custom-table" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+          <div className="table-responsive-wrapper">
+            <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: '600px' }}>
               <thead style={{ background: '#f8f9fa', borderBottom: '1px solid #eee' }}>
                 <tr>
-                  <th style={{ padding: '15px' }}>Event Title</th>
-                  <th style={{ padding: '15px' }}>Tickets Sold</th>
-                  <th style={{ padding: '15px' }}>Available Earnings</th>
-                  <th style={{ padding: '15px' }}>Action</th>
+                  <th style={{ padding: '15px', fontSize: '13px', color: '#555' }}>Event Title</th>
+                  <th style={{ padding: '15px', fontSize: '13px', color: '#555' }}>Tickets Sold</th>
+                  <th style={{ padding: '15px', fontSize: '13px', color: '#555' }}>Available Earnings</th>
+                  <th style={{ padding: '15px', fontSize: '13px', color: '#555' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {revenueData.eventsList?.map((evt) => {
-                  // ✅ Fixed: Use evt.eventRevenue directly without deducting 7% a second time
                   const netEventRevenue = evt.eventRevenue;
                   
                   return (
                     <tr key={evt._id} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: '15px' }}><strong>{evt.title}</strong></td>
-                      <td style={{ padding: '15px' }}>{evt.eventTicketsSold} / {evt.eventCapacity}</td>
-                      <td style={{ padding: '15px' }}><strong>₦{netEventRevenue.toLocaleString()}</strong></td>
+                      <td style={{ padding: '15px', fontSize: '14px' }}><strong>{evt.title}</strong></td>
+                      <td style={{ padding: '15px', fontSize: '14px' }}>{evt.eventTicketsSold} / {evt.eventCapacity}</td>
+                      <td style={{ padding: '15px', fontSize: '14px' }}><strong>₦{netEventRevenue.toLocaleString()}</strong></td>
                       <td style={{ padding: '15px' }}>
                         <button 
                           onClick={() => setSelectedEventForPayout(evt)}
                           disabled={netEventRevenue <= 0}
-                          className="btn btn-sm"
                           style={{ 
                             background: netEventRevenue > 0 ? 'var(--primary)' : '#ccc', 
                             color: 'white', 
                             padding: '8px 16px', 
                             borderRadius: '6px', 
                             border: 'none', 
-                            cursor: netEventRevenue > 0 ? 'pointer' : 'not-allowed' 
+                            cursor: netEventRevenue > 0 ? 'pointer' : 'not-allowed',
+                            fontSize: '13px',
+                            fontWeight: '600'
                           }}
                         >
                           Withdraw
@@ -189,10 +241,11 @@ const Wallet = () => {
       </div>
 
       {/* TRANSACTION HISTORY TABLE WITH PAGINATION */}
-      <div style={{ marginTop: '40px', background: 'white', padding: '30px', borderRadius: '16px', border: '1px solid #eee' }}>
+      <div style={{ marginTop: '40px', background: 'white', padding: '25px', borderRadius: '16px', border: '1px solid #eee' }}>
         <h3 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '20px', marginBottom: '20px' }}>Transaction History</h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        
+        <div className="table-responsive-wrapper" style={{ border: 'none' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '650px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #eee', color: '#666', fontSize: '12px', textTransform: 'uppercase' }}>
                 <th style={{ padding: '15px' }}>Date</th>
@@ -205,13 +258,13 @@ const Wallet = () => {
             <tbody>
               {currentTransactions.map((tx) => (
                 <tr key={tx.id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '15px', color: '#555', fontSize: '14px' }}>
+                  <td style={{ padding: '15px', color: '#555', fontSize: '14px', whiteSpace: 'nowrap' }}>
                     {new Date(tx.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </td>
-                  <td style={{ padding: '15px', fontWeight: '500', fontSize: '15px' }}>
+                  <td style={{ padding: '15px', fontWeight: '500', fontSize: '14px' }}>
                     {tx.description}
                   </td>
-                  <td style={{ padding: '15px' }}>
+                  <td style={{ padding: '15px', whiteSpace: 'nowrap' }}>
                     <span style={{ 
                       padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold',
                       background: tx.type === 'credit' ? '#e6f9f0' : '#ffe6e6',
@@ -220,12 +273,12 @@ const Wallet = () => {
                       {tx.type === 'credit' ? '+ Money In' : '- Money Out'}
                     </span>
                   </td>
-                  <td style={{ padding: '15px', fontWeight: 'bold', fontSize: '15px' }}>
+                  <td style={{ padding: '15px', fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap' }}>
                     ₦{tx.amount.toLocaleString()}
                   </td>
-                  <td style={{ padding: '15px' }}>
+                  <td style={{ padding: '15px', whiteSpace: 'nowrap' }}>
                     <span style={{ 
-                      textTransform: 'capitalize', fontWeight: 'bold', fontSize: '14px',
+                      textTransform: 'capitalize', fontWeight: 'bold', fontSize: '13px',
                       color: tx.status === 'pending' ? '#f5a623' : tx.status === 'rejected' ? '#cc0000' : '#00b060' 
                     }}>
                       {tx.status}
@@ -236,7 +289,7 @@ const Wallet = () => {
               
               {(!revenueData.transactions || revenueData.transactions.length === 0) && (
                 <tr>
-                  <td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#888' }}>
+                  <td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#888', fontSize: '14px' }}>
                     No transactions found. Sell tickets or request a payout to see history.
                   </td>
                 </tr>
@@ -247,7 +300,7 @@ const Wallet = () => {
 
         {/* Pagination Controls */}
         {totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #eee' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #eee', flexWrap: 'wrap', gap: '10px' }}>
             <button 
               onClick={handlePrev} 
               disabled={currentPage === 1}
@@ -258,7 +311,8 @@ const Wallet = () => {
                 background: 'white', 
                 cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
                 opacity: currentPage === 1 ? 0.5 : 1,
-                fontWeight: '600'
+                fontWeight: '600',
+                fontSize: '13px'
               }}
             >
               ← Previous
@@ -278,7 +332,8 @@ const Wallet = () => {
                 background: 'white', 
                 cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
                 opacity: currentPage === totalPages ? 0.5 : 1,
-                fontWeight: '600'
+                fontWeight: '600',
+                fontSize: '13px'
               }}
             >
               Next →
