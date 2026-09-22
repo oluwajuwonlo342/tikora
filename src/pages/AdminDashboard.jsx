@@ -288,19 +288,26 @@ const AdminDashboard = () => {
                 )
               )}
 
+              {/* UPDATED: Added Gross Amount and Platform Fee columns */}
               {activeTab === 'events' && renderTable(
-                ['Event Title', 'Organizer', 'Tickets Sold', 'Action'],
+                ['Event Title', 'Organizer', 'Tickets Sold', 'Gross Amount', 'Platform Fee (7%)', 'Action'],
                 eventsList,
                 (e) => {
                   const totalSold = e.tickets && e.tickets.length > 0 
                     ? e.tickets.reduce((sum, tier) => sum + (tier.sold || 0), 0) 
                     : (e.eventTicketsSold || 0);
+                  
+                  // Use variables computed in the backend, default to 0 if not yet available
+                  const grossEarned = e.grossEarned || 0;
+                  const platformFee = e.platformFee || 0;
 
                   return (
                     <tr key={e._id} style={{ borderBottom: '1px solid #eee' }}>
                       <td style={{ padding: '20px 25px', fontWeight: '600' }}>{e.title}</td>
                       <td style={{ padding: '20px 25px' }}>{e.organizer?.name || 'Unknown'}</td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>{totalSold}</td>
+                      <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{grossEarned.toLocaleString()}</td>
+                      <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#e65100' }}>₦{platformFee.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px' }}>
                         <button style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'white', background: '#cc0000', border: 'none', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
                           <Trash2 size={16} /> Delete
