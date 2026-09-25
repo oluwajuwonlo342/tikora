@@ -128,10 +128,10 @@ function Navbar() {
               </>
             )}
 
-            {/* Mobile Hamburger Trigger */}
-            <button className="mobile-menu" onClick={() => setIsOpen(true)}>
-              <Menu size={28} />
-            </button>
+          {/* Mobile Hamburger Trigger */}
+<button className="mobile-menu" onClick={() => setIsOpen(!isOpen)} style={{ zIndex: 1000, position: 'relative' }}>
+  {isOpen ? <X size={28} /> : <Menu size={28} />}
+</button>
           </div>
 
         </div>
