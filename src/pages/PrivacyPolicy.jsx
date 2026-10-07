@@ -53,7 +53,7 @@ const PrivacyPolicy = () => {
       </section>
 
       <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '40px 0' }} />
-      <p style={{ fontSize: '14px', color: '#777' }}>For privacy-related inquiries, please contact privacy@tickora.com.</p>
+      <p style={{ fontSize: '14px', color: '#777' }}>For privacy-related inquiries, please contact tickora@gmail.com.</p>
     </main>
   );
 };
