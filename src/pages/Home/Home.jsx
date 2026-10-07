@@ -225,6 +225,8 @@ function Home() {
               Create your event
               <ArrowRight size={18} />
             </Link>
+            <Link to="/terms" style={{ color: '#666', textDecoration: 'none' }}>Terms & Conditions</Link>
+<Link to="/privacy" style={{ color: '#666', textDecoration: 'none' }}>Privacy Policy</Link>
           </div>
         </div>
       </section>
