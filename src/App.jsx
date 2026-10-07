@@ -19,6 +19,8 @@ import PaymentVerify from "./pages/PaymentVerify";
 import Events from "./pages/Events"; 
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
+import TermsAndConditions from './pages/TermsAndConditions';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 function App() {
   return (
     <BrowserRouter>
@@ -44,6 +46,8 @@ function App() {
         <Route path="/about" element={<About />} />
         <Route path="/wallet" element={<Wallet />} />
         <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/terms" element={<TermsAndConditions />} />
+<Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/admin" element={<AdminDashboard />} />
       </Routes>
     </BrowserRouter>
