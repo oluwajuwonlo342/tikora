@@ -64,12 +64,33 @@ const AdminDashboard = () => {
     navigate('/admin/login');
   };
 
+  // ==========================================
+  // APPROVE PAYOUT — MANUAL TRANSFER
+  //
+  // The backend no longer calls Paystack's Transfer API (Starter Business
+  // accounts can't send to third parties). Instead, you send the money
+  // yourself via your own bank app using the bank details shown in the
+  // table below, then enter that transfer's reference here as proof
+  // before the payout is marked approved.
+  // ==========================================
   const handleApprovePayout = async (payoutId) => {
-    if (!window.confirm("Are you sure you want to approve and transfer these funds?")) return;
+    const paymentReference = window.prompt(
+      "Enter the bank transaction reference for the transfer you just sent to the organizer:"
+    );
+
+    if (paymentReference === null) return; // user cancelled
+
+    if (!paymentReference.trim()) {
+      alert("A payment reference is required to approve this payout.");
+      return;
+    }
+
     try {
-      const res = await api.post(`/payouts/admin/approve/${payoutId}`);
+      const res = await api.post(`/payouts/admin/approve/${payoutId}`, {
+        paymentReference: paymentReference.trim()
+      });
       if (res.data.success) {
-        alert("Payout approved successfully!");
+        alert("Payout marked as approved and paid.");
         setPendingPayouts(prev => prev.filter(p => p._id !== payoutId));
       } else {
         alert(res.data.message || "Failed to approve payout.");
@@ -253,13 +274,16 @@ const AdminDashboard = () => {
               {activeTab === 'overview' && renderOverview()}
               
               {activeTab === 'payouts' && renderTable(
-                ['Organizer', 'Event', 'Amount', 'Action'],
+                ['Organizer', 'Event', 'Amount', 'Bank', 'Account Number', 'Account Name', 'Action'],
                 pendingPayouts,
                 (p) => (
                   <tr key={p._id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '20px 25px' }}>{p.organizer?.name || 'Unknown'}</td>
                     <td style={{ padding: '20px 25px' }}>{p.event?.title || 'Unknown Event'}</td>
                     <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{p.amount.toLocaleString()}</td>
+                    <td style={{ padding: '20px 25px' }}>{p.bankDetails?.bankName || '—'}</td>
+                    <td style={{ padding: '20px 25px', fontFamily: 'monospace' }}>{p.bankDetails?.accountNumber || '—'}</td>
+                    <td style={{ padding: '20px 25px' }}>{p.bankDetails?.accountName || '—'}</td>
                     <td style={{ padding: '20px 25px', display: 'flex', gap: '10px' }}>
                       <button 
                         onClick={() => handleApprovePayout(p._id)} 
