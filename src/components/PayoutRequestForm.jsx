@@ -1,40 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Loader, CheckCircle, AlertCircle } from 'lucide-react';
 import api from '../services/api';
-
-// Popular Nigerian Banks (Paystack Codes)
-const NIGERIAN_BANKS = [
-  { code: '044', name: 'Access Bank' },
-  { code: '050', name: 'Ecobank' },
-  { code: '070', name: 'Fidelity Bank' },
-  { code: '011', name: 'First Bank of Nigeria' },
-  { code: '214', name: 'First City Monument Bank (FCMB)' },
-  { code: '058', name: 'Guaranty Trust Bank (GTB)' },
-  { code: '082', name: 'Keystone Bank' },
-  { code: '090328', name: 'Moniepoint' },
-  { code: '090267', name: 'Kuda Bank' },
-  { code: '999992', name: 'OPay' },
-  { code: '100039', name: 'PalmPay' },
-  { code: '076', name: 'Polaris Bank' },
-  { code: '221', name: 'Stanbic IBTC Bank' },
-  { code: '232', name: 'Sterling Bank' },
-  { code: '032', name: 'Union Bank' },
-  { code: '033', name: 'United Bank for Africa (UBA)' },
-  { code: '215', name: 'Unity Bank' },
-  { code: '035', name: 'Wema Bank' },
-  { code: '057', name: 'Zenith Bank' }
-];
 
 const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
   const [amount, setAmount] = useState('');
   const [bankCode, setBankCode] = useState('');
+  const [bankSearch, setBankSearch] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
-  
+
+  // Bank list — fetched live from Paystack via our backend instead of a
+  // hardcoded array, so every supported bank is available and codes stay
+  // correct even if Paystack adds or changes one.
+  const [banks, setBanks] = useState([]);
+  const [banksLoading, setBanksLoading] = useState(true);
+  const [banksError, setBanksError] = useState('');
+
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Fetch the bank list once on mount
+  useEffect(() => {
+    const fetchBanks = async () => {
+      setBanksLoading(true);
+      setBanksError('');
+      try {
+        const response = await api.get('/payouts/banks');
+        if (response.data.success) {
+          setBanks(response.data.banks);
+        } else {
+          setBanksError('Could not load the list of banks.');
+        }
+      } catch (err) {
+        setBanksError(err.response?.data?.message || 'Could not load the list of banks.');
+      } finally {
+        setBanksLoading(false);
+      }
+    };
+    fetchBanks();
+  }, []);
+
+  const filteredBanks = useMemo(() => {
+    if (!bankSearch.trim()) return banks;
+    const q = bankSearch.trim().toLowerCase();
+    return banks.filter((b) => b.name.toLowerCase().includes(q));
+  }, [banks, bankSearch]);
 
   // Auto-verify account when 10 digits are entered and bank is selected
   useEffect(() => {
@@ -43,13 +55,13 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
         setIsVerifying(true);
         setError('');
         setAccountName('');
-        
+
         try {
           const response = await api.post('/payouts/verify-bank', {
             accountNumber,
             bankCode
           });
-          
+
           if (response.data.success) {
             setAccountName(response.data.accountName);
           }
@@ -89,14 +101,14 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
     setIsSubmitting(true);
 
     try {
-      const selectedBank = NIGERIAN_BANKS.find(b => b.code === bankCode);
-      
+      const selectedBank = banks.find((b) => b.code === bankCode);
+
       const response = await api.post('/payouts/request', {
         eventId,
         amountRequested: Number(amount),
         bankDetails: {
-          bankName: selectedBank.name,
-          bankCode: selectedBank.code,
+          bankName: selectedBank?.name,
+          bankCode: selectedBank?.code,
           accountNumber,
           accountName
         }
@@ -107,6 +119,7 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
         setAmount('');
         setAccountNumber('');
         setBankCode('');
+        setBankSearch('');
         setAccountName('');
         if (onSuccess) onSuccess();
       }
@@ -132,12 +145,12 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        
+
         {/* Amount Input */}
         <div>
           <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500' }}>Amount to Withdraw (₦)</label>
-          <input 
-            type="number" 
+          <input
+            type="number"
             min="100"
             max={availableBalance}
             value={amount}
@@ -148,27 +161,51 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
           />
         </div>
 
-        {/* Bank Dropdown */}
+        {/* Bank Search + Dropdown */}
         <div>
           <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500' }}>Select Bank</label>
-          <select 
+
+          {banksError && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#cc0000', fontSize: '13px', marginBottom: '8px' }}>
+              <AlertCircle size={14} /> {banksError}
+            </div>
+          )}
+
+          <input
+            type="text"
+            value={bankSearch}
+            onChange={(e) => setBankSearch(e.target.value)}
+            placeholder={banksLoading ? 'Loading banks…' : 'Search for your bank...'}
+            disabled={banksLoading}
+            style={{ width: '100%', padding: '10px 15px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '8px' }}
+          />
+
+          <select
             value={bankCode}
             onChange={(e) => setBankCode(e.target.value)}
             required
+            disabled={banksLoading}
+            size={bankSearch ? Math.min(filteredBanks.length, 6) || 1 : 1}
             style={{ width: '100%', padding: '10px 15px', borderRadius: '8px', border: '1px solid #ddd', backgroundColor: 'white' }}
           >
-            <option value="">-- Choose your bank --</option>
-            {NIGERIAN_BANKS.map((bank) => (
+            <option value="">
+              {banksLoading ? 'Loading banks…' : '-- Choose your bank --'}
+            </option>
+            {filteredBanks.map((bank) => (
               <option key={bank.code} value={bank.code}>{bank.name}</option>
             ))}
           </select>
+
+          {!banksLoading && filteredBanks.length === 0 && (
+            <p style={{ color: '#888', fontSize: '13px', marginTop: '6px' }}>No bank matches "{bankSearch}".</p>
+          )}
         </div>
 
         {/* Account Number Input */}
         <div>
           <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500' }}>Account Number</label>
-          <input 
-            type="text" 
+          <input
+            type="text"
             maxLength="10"
             value={accountNumber}
             onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ''))} // Only allow numbers
@@ -205,13 +242,13 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
         )}
 
         {/* Submit Button */}
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           disabled={!accountName || isSubmitting || Number(amount) <= 0}
           className="btn btn-primary"
-          style={{ 
-            marginTop: '10px', 
-            padding: '12px', 
+          style={{
+            marginTop: '10px',
+            padding: '12px',
             opacity: (!accountName || isSubmitting || Number(amount) <= 0) ? 0.6 : 1,
             cursor: (!accountName || isSubmitting || Number(amount) <= 0) ? 'not-allowed' : 'pointer',
             display: 'flex',
