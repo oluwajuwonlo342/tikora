@@ -67,16 +67,36 @@ const EventDetails = () => {
         {token ? "Back to Dashboard" : "Back to Events"}
       </Link>
 
-      {/* ✅ FIX: Container naturally wraps the image. Image scales to 100% width with auto height. */}
-      <div className="event-banner" style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', marginBottom: '40px', backgroundColor: '#f8f9fa' }}>
+      {/* ✅ FIX: Bulletproof Responsive Image Container */}
+      <div 
+        className="event-banner" 
+        style={{ 
+          width: '100%', 
+          maxHeight: '500px', // Prevents tall images from taking up the whole screen
+          backgroundColor: '#0a0a0a', // Dark background for letterboxing
+          borderRadius: '16px', 
+          overflow: 'hidden', 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          marginBottom: '40px' 
+        }}
+      >
         {event.image ? (
           <img 
             src={event.image} 
             alt={event.title} 
-            style={{ width: '100%', height: 'auto', display: 'block' }} 
+            style={{ 
+              maxWidth: '100%', 
+              maxHeight: '500px', 
+              width: 'auto', 
+              height: 'auto', 
+              objectFit: 'contain', // Guarantees the entire image is visible without cropping
+              display: 'block' 
+            }} 
           />
         ) : (
-          <div style={{ padding: '100px 20px', textAlign: 'center', color: '#666', fontWeight: 'bold' }}>No Image Available</div>
+          <div style={{ padding: '100px 20px', textAlign: 'center', color: '#fff', fontWeight: 'bold' }}>No Image Available</div>
         )}
       </div>
 
