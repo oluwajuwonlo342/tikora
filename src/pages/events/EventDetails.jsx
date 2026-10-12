@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Calendar, MapPin, Ticket as TicketIcon, Loader } from 'lucide-react';
 import axios from 'axios';
-import TicketPurchaseModal from '../../components/TicketPurchaseModal'; 
+import TicketPurchaseModal from '../../components/TicketPurchaseModal';
 
 const EventDetails = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   // Modal and Selection State
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [preSelectedTicketId, setPreSelectedTicketId] = useState(null);
@@ -33,8 +32,8 @@ const EventDetails = () => {
     fetchEventDetails();
   }, [id]);
 
-  if (loading) return <div style={{textAlign: 'center', padding: '100px'}}><Loader size={40} className="animate-spin" /></div>;
-  if (error || !event) return <div style={{textAlign: 'center', padding: '100px', color: 'red'}}>{error || 'Event not found'}</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: '100px' }}><Loader size={40} className="animate-spin" /></div>;
+  if (error || !event) return <div style={{ textAlign: 'center', padding: '100px', color: 'red' }}>{error || 'Event not found'}</div>;
 
   const handleTierClick = (ticketId) => {
     setPreSelectedTicketId(ticketId);
@@ -49,7 +48,7 @@ const EventDetails = () => {
   const formatDateTime = (dateString) => {
     if (!dateString) return '';
     return new Date(dateString).toLocaleString('en-NG', {
-      timeZone: 'UTC', 
+      timeZone: 'UTC',
       weekday: 'short',
       month: 'short',
       day: 'numeric',
@@ -63,40 +62,39 @@ const EventDetails = () => {
   return (
     <div className="container event-details-container">
       <Link to={token ? "/dashboard" : "/events"} className="back-link" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '20px', textDecoration: 'none', color: '#555', fontWeight: '600' }}>
-        <ArrowLeft size={18} /> 
+        <ArrowLeft size={18} />
         {token ? "Back to Dashboard" : "Back to Events"}
       </Link>
 
-      {/* ✅ FIX: Bulletproof Responsive Image Container */}
-      <div 
-        className="event-banner" 
-        style={{ 
-          width: '100%', 
-          maxHeight: '500px', // Prevents tall images from taking up the whole screen
-          backgroundColor: '#0a0a0a', // Dark background for letterboxing
-          borderRadius: '16px', 
-          overflow: 'hidden', 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          marginBottom: '40px' 
+      {/* FIX: explicit responsive height + object-fit: contain so the whole poster is always visible.
+          The className is removed so stylesheet rules (.event-banner / .event-banner img)
+          can't override these inline styles. */}
+      <div
+        style={{
+          width: '100%',
+          height: 'clamp(280px, 60vh, 600px)',
+          backgroundColor: '#0a0a0a',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginBottom: '40px'
         }}
       >
         {event.image ? (
-          <img 
-            src={event.image} 
-            alt={event.title} 
-            style={{ 
-              maxWidth: '100%', 
-              maxHeight: '500px', 
-              width: 'auto', 
-              height: 'auto', 
-              objectFit: 'contain', // Guarantees the entire image is visible without cropping
-              display: 'block' 
-            }} 
+          <img
+            src={event.image}
+            alt={event.title}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              display: 'block'
+            }}
           />
         ) : (
-          <div style={{ padding: '100px 20px', textAlign: 'center', color: '#fff', fontWeight: 'bold' }}>No Image Available</div>
+          <div style={{ color: '#fff', fontWeight: 'bold' }}>No Image Available</div>
         )}
       </div>
 
@@ -127,7 +125,7 @@ const EventDetails = () => {
               <div className="meta-info">
                 <h4 style={{ margin: '0 0 5px 0', fontSize: '16px', color: '#111' }}>Location</h4>
                 <p style={{ margin: 0, color: '#555', fontSize: '15px', fontWeight: '500' }}>{event.venue}</p>
-                <p style={{ color: '#777', fontSize: '14px', marginTop: '3px', margin: '4px 0 0 0' }}>{event.location}</p>
+                <p style={{ color: '#777', fontSize: '14px', margin: '4px 0 0 0' }}>{event.location}</p>
               </div>
             </div>
           </div>
@@ -138,18 +136,18 @@ const EventDetails = () => {
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '20px', margin: '0 0 20px 0' }}>
               <TicketIcon size={24} color="#ff5a36" /> Ticket Tiers
             </h3>
-            
+
             <div className="tier-list" style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '25px' }}>
               {event.tickets?.map((tier) => {
                 const available = tier.quantity - tier.sold;
                 const isAvailable = available > 0;
-                
+
                 return (
-                  <div 
-                    key={tier._id || tier.name} 
+                  <div
+                    key={tier._id || tier.name}
                     className="tier-card"
                     onClick={() => isAvailable && handleTierClick(tier._id)}
-                    style={{ 
+                    style={{
                       cursor: isAvailable ? 'pointer' : 'not-allowed',
                       opacity: isAvailable ? 1 : 0.6,
                       border: '2px solid #e5e7eb',
@@ -172,8 +170,8 @@ const EventDetails = () => {
               })}
             </div>
 
-            <button 
-              onClick={handleBuyClick} 
+            <button
+              onClick={handleBuyClick}
               className="btn btn-primary buy-btn"
               style={{ width: '100%', padding: '14px', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', background: '#ff5a36', color: 'white', border: 'none', cursor: 'pointer' }}
             >
@@ -184,10 +182,10 @@ const EventDetails = () => {
       </div>
 
       {showPurchaseModal && (
-        <TicketPurchaseModal 
-          event={event} 
-          onClose={() => setShowPurchaseModal(false)} 
-          initialTicketId={preSelectedTicketId} 
+        <TicketPurchaseModal
+          event={event}
+          onClose={() => setShowPurchaseModal(false)}
+          initialTicketId={preSelectedTicketId}
         />
       )}
     </div>
