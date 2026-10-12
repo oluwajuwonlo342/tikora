@@ -66,13 +66,13 @@ const EventDetails = () => {
         {token ? "Back to Dashboard" : "Back to Events"}
       </Link>
 
-      {/* FIX: explicit responsive height + object-fit: contain so the whole poster is always visible.
-          The className is removed so stylesheet rules (.event-banner / .event-banner img)
+      {/* Banner: the image sets its own height, so landscape posters have no black bars.
+          maxHeight stops tall posters from taking over the page; objectFit: contain
+          guarantees nothing is cropped. The className is removed so stylesheet rules
           can't override these inline styles. */}
       <div
         style={{
           width: '100%',
-          height: 'clamp(280px, 60vh, 600px)',
           backgroundColor: '#0a0a0a',
           borderRadius: '16px',
           overflow: 'hidden',
@@ -87,14 +87,15 @@ const EventDetails = () => {
             src={event.image}
             alt={event.title}
             style={{
+              display: 'block',
               width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              display: 'block'
+              height: 'auto',
+              maxHeight: '600px',
+              objectFit: 'contain'
             }}
           />
         ) : (
-          <div style={{ color: '#fff', fontWeight: 'bold' }}>No Image Available</div>
+          <div style={{ padding: '100px 20px', color: '#fff', fontWeight: 'bold' }}>No Image Available</div>
         )}
       </div>
 
