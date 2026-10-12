@@ -36,19 +36,16 @@ const EventDetails = () => {
   if (loading) return <div style={{textAlign: 'center', padding: '100px'}}><Loader size={40} className="animate-spin" /></div>;
   if (error || !event) return <div style={{textAlign: 'center', padding: '100px', color: 'red'}}>{error || 'Event not found'}</div>;
 
-  // Handler for clicking a specific ticket tier
   const handleTierClick = (ticketId) => {
     setPreSelectedTicketId(ticketId);
     setShowPurchaseModal(true);
   };
 
-  // Handler for the general "Get Tickets Now" button
   const handleBuyClick = () => {
     setPreSelectedTicketId(null);
     setShowPurchaseModal(true);
   };
 
-  // ✅ FIX: Force UTC timezone to prevent the browser from adding +1 hour to the saved time
   const formatDateTime = (dateString) => {
     if (!dateString) return '';
     return new Date(dateString).toLocaleString('en-NG', {
@@ -70,16 +67,16 @@ const EventDetails = () => {
         {token ? "Back to Dashboard" : "Back to Events"}
       </Link>
 
-      {/* ✅ FIX: Display full image without cropping using objectFit: 'contain' */}
-      <div className="event-banner" style={{ width: '100%', height: '400px', backgroundColor: '#0a0a0a', borderRadius: '16px', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '40px' }}>
+      {/* ✅ FIX: Container naturally wraps the image. Image scales to 100% width with auto height. */}
+      <div className="event-banner" style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', marginBottom: '40px', backgroundColor: '#f8f9fa' }}>
         {event.image ? (
           <img 
             src={event.image} 
             alt={event.title} 
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+            style={{ width: '100%', height: 'auto', display: 'block' }} 
           />
         ) : (
-          <div style={{ color: '#fff', fontWeight: 'bold' }}>No Image Available</div>
+          <div style={{ padding: '100px 20px', textAlign: 'center', color: '#666', fontWeight: 'bold' }}>No Image Available</div>
         )}
       </div>
 
@@ -98,7 +95,6 @@ const EventDetails = () => {
               </div>
               <div className="meta-info">
                 <h4 style={{ margin: '0 0 5px 0', fontSize: '16px', color: '#111' }}>Date & Time</h4>
-                {/* Applied formatDateTime helper to prevent 8PM -> 9PM shift */}
                 <p style={{ margin: 0, color: '#555', fontSize: '15px' }}>Start: {formatDateTime(event.date)}</p>
                 {event.endDate && <p style={{ margin: '4px 0 0 0', color: '#555', fontSize: '15px' }}>End: {formatDateTime(event.endDate)}</p>}
               </div>
