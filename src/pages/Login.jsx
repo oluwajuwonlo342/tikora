@@ -12,7 +12,7 @@ function Login() {
   });
 
   const [loading, setLoading] = useState(false);
-  
+
   // State for toggling password visibility
   const [showPassword, setShowPassword] = useState(false);
 
@@ -29,33 +29,17 @@ function Login() {
     try {
       setLoading(true);
 
-      const response = await api.post(
-        "/auth/login",
-        form
-      );
+      const response = await api.post("/auth/login", form);
 
       if (response.data.success) {
-        localStorage.setItem(
-          "token",
-          response.data.token
-        );
+        localStorage.setItem("token", response.data.token);
 
-        localStorage.setItem(
-          "user",
-          JSON.stringify(response.data.user)
-        );
+        localStorage.setItem("user", JSON.stringify(response.data.user));
 
-        // ✅ NEW: Check the role and route accordingly
-        const userRole = response.data.user.role;
-        
         navigate("/dashboard");
       }
-
     } catch (error) {
-      alert(
-        error.response?.data?.message ||
-          "Login failed."
-      );
+      alert(error.response?.data?.message || "Login failed.");
     } finally {
       setLoading(false);
     }
@@ -63,25 +47,16 @@ function Login() {
 
   return (
     <main className="auth-page">
-
       <div className="auth-card">
-
         <div className="auth-header">
-
-          <span className="page-label">
-            WELCOME BACK
-          </span>
+          <span className="page-label">WELCOME BACK</span>
 
           <h1>Login</h1>
 
-          <p>
-            Sign in to manage your tickets and events.
-          </p>
-
+          <p>Sign in to manage your tickets and events.</p>
         </div>
 
         <form onSubmit={handleSubmit}>
-
           <div className="form-group">
             <label>Email</label>
 
@@ -122,11 +97,21 @@ function Login() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  padding: 0
+                  padding: 0,
                 }}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
+            </div>
+
+            {/* Forgot password link */}
+            <div style={{ textAlign: "right", marginTop: "8px" }}>
+              <Link
+                to="/forgot-password"
+                style={{ fontSize: "14px", color: "#ff5a36", textDecoration: "none", fontWeight: 600 }}
+              >
+                Forgot password?
+              </Link>
             </div>
           </div>
 
@@ -135,22 +120,14 @@ function Login() {
             className="btn btn-primary auth-submit"
             disabled={loading}
           >
-            {loading
-              ? "Signing in..."
-              : "Login"}
+            {loading ? "Signing in..." : "Login"}
           </button>
-
         </form>
 
         <p className="auth-footer">
-          Don't have an account?{" "}
-          <Link to="/register">
-            Create account
-          </Link>
+          Don't have an account? <Link to="/register">Create account</Link>
         </p>
-
       </div>
-
     </main>
   );
 }
