@@ -21,6 +21,8 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 function App() {
   return (
     <BrowserRouter>
@@ -49,6 +51,8 @@ function App() {
         <Route path="/terms" element={<TermsAndConditions />} />
 <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+<Route path="/reset-password/:token" element={<ResetPassword />} />
       </Routes>
     </BrowserRouter>
   );
