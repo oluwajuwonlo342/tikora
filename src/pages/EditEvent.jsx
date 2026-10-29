@@ -112,30 +112,47 @@ function EditEvent() {
     }
   };
 
-  const formatDateForInput = (date) => {
-    if (!date) return "";
+  // Format stored timestamps as Nigerian local time.
+  const formatDateForInput = (value) => {
+    if (!value) return "";
 
-    const parsedDate = new Date(date);
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Lagos",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(date);
+
+    const part = (type) =>
+      parts.find((item) => item.type === type)?.value || "";
+
+    return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+  };
+
+  // Convert Nigerian local time to a UTC timestamp before saving.
+  // Example: 9:00 AM in Lagos becomes 8:00 AM UTC.
+  const convertNigerianTimeToISO = (value) => {
+    if (!value) return "";
+
+    const normalized = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
+      ? `${value}:00`
+      : value;
+
+    const withNigeriaOffset = `${normalized}+01:00`;
+    const parsedDate = new Date(withNigeriaOffset);
 
     if (Number.isNaN(parsedDate.getTime())) {
-      return "";
+      throw new Error("Invalid event date or time.");
     }
 
-    const year = parsedDate.getFullYear();
-    const month = String(
-      parsedDate.getMonth() + 1
-    ).padStart(2, "0");
-    const day = String(
-      parsedDate.getDate()
-    ).padStart(2, "0");
-    const hours = String(
-      parsedDate.getHours()
-    ).padStart(2, "0");
-    const minutes = String(
-      parsedDate.getMinutes()
-    ).padStart(2, "0");
-
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
+    return parsedDate.toISOString();
   };
 
   const handleChange = (e) => {
@@ -147,11 +164,7 @@ function EditEvent() {
     }));
   };
 
-  const handleTicketChange = (
-    index,
-    field,
-    value
-  ) => {
+  const handleTicketChange = (index, field, value) => {
     setTickets((prev) =>
       prev.map((ticket, ticketIndex) =>
         ticketIndex === index
@@ -181,10 +194,7 @@ function EditEvent() {
     }
 
     setTickets((prev) =>
-      prev.filter(
-        (_, ticketIndex) =>
-          ticketIndex !== index
-      )
+      prev.filter((_, ticketIndex) => ticketIndex !== index)
     );
   };
 
@@ -194,25 +204,19 @@ function EditEvent() {
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
-      setError(
-        "Image must be less than 5MB."
-      );
+      setError("Image must be less than 5MB.");
       return;
     }
 
     if (!file.type.startsWith("image/")) {
-      setError(
-        "Please select a valid image file."
-      );
+      setError("Please select a valid image file.");
       return;
     }
 
     setError("");
     setImageFile(file);
 
-    const previewUrl =
-      URL.createObjectURL(file);
-
+    const previewUrl = URL.createObjectURL(file);
     setImagePreview(previewUrl);
   };
 
@@ -265,18 +269,14 @@ function EditEvent() {
         ticket.price === "" ||
         Number(ticket.price) < 0
       ) {
-        return `Enter a valid price for ticket ${
-          i + 1
-        }.`;
+        return `Enter a valid price for ticket ${i + 1}.`;
       }
 
       if (
         ticket.quantity === "" ||
         Number(ticket.quantity) < 1
       ) {
-        return `Enter a valid quantity for ticket ${
-          i + 1
-        }.`;
+        return `Enter a valid quantity for ticket ${i + 1}.`;
       }
 
       if (
@@ -300,10 +300,12 @@ function EditEvent() {
 
     if (validationError) {
       setError(validationError);
+
       window.scrollTo({
         top: 0,
         behavior: "smooth",
       });
+
       return;
     }
 
@@ -312,70 +314,38 @@ function EditEvent() {
 
       const formData = new FormData();
 
-      formData.append(
-        "title",
-        form.title.trim()
-      );
-
-      formData.append(
-        "description",
-        form.description.trim()
-      );
-
-      formData.append(
-        "category",
-        form.category
-      );
+      formData.append("title", form.title.trim());
+      formData.append("description", form.description.trim());
+      formData.append("category", form.category);
 
       formData.append(
         "date",
-        form.date
+        convertNigerianTimeToISO(form.date)
       );
 
       if (form.endDate) {
         formData.append(
           "endDate",
-          form.endDate
+          convertNigerianTimeToISO(form.endDate)
         );
       }
 
-      formData.append(
-        "venue",
-        form.venue.trim()
-      );
+      formData.append("venue", form.venue.trim());
+      formData.append("location", form.location.trim());
+      formData.append("status", form.status);
 
-      formData.append(
-        "location",
-        form.location.trim()
-      );
+      const cleanTickets = tickets.map((ticket) => ({
+        ...(ticket._id ? { _id: ticket._id } : {}),
+        name: ticket.name.trim(),
+        price: Number(ticket.price),
+        quantity: Number(ticket.quantity),
+        sold: Number(ticket.sold || 0),
+      }));
 
-      formData.append(
-        "status",
-        form.status
-      );
-
-      const cleanTickets = tickets.map(
-        (ticket) => ({
-          ...(ticket._id
-            ? { _id: ticket._id }
-            : {}),
-          name: ticket.name.trim(),
-          price: Number(ticket.price),
-          quantity: Number(ticket.quantity),
-          sold: Number(ticket.sold || 0),
-        })
-      );
-
-      formData.append(
-        "tickets",
-        JSON.stringify(cleanTickets)
-      );
+      formData.append("tickets", JSON.stringify(cleanTickets));
 
       if (imageFile) {
-        formData.append(
-          "image",
-          imageFile
-        );
+        formData.append("image", imageFile);
       }
 
       console.log("Updating event:", id);
@@ -385,30 +355,21 @@ function EditEvent() {
         formData
       );
 
-      console.log(
-        "UPDATE EVENT RESPONSE:",
-        response.data
-      );
+      console.log("UPDATE EVENT RESPONSE:", response.data);
 
       if (response.data.success) {
-        setSuccess(
-          "Event updated successfully."
-        );
+        setSuccess("Event updated successfully.");
 
         setTimeout(() => {
           navigate(`/events/${id}`);
         }, 1000);
       } else {
         setError(
-          response.data.message ||
-            "Unable to update event."
+          response.data.message || "Unable to update event."
         );
       }
     } catch (error) {
-      console.error(
-        "Update event error:",
-        error
-      );
+      console.error("Update event error:", error);
 
       if (error.response?.status === 401) {
         localStorage.removeItem("token");
@@ -445,7 +406,6 @@ function EditEvent() {
   return (
     <main className="edit-event-page">
       <div className="container">
-
         <Link
           to="/my-events"
           className="back-link"
@@ -456,15 +416,12 @@ function EditEvent() {
 
         <div className="edit-event-header">
           <div>
-            <span className="page-label">
-              ORGANIZER
-            </span>
+            <span className="page-label">ORGANIZER</span>
 
             <h1>Edit Event</h1>
 
             <p>
-              Update your event information,
-              tickets, and event image.
+              Update your event information, tickets, and event image.
             </p>
           </div>
         </div>
@@ -485,20 +442,18 @@ function EditEvent() {
           onSubmit={handleSubmit}
           className="edit-event-form"
         >
-
           {/* EVENT INFORMATION */}
 
           <section className="form-section">
             <div className="form-section-header">
               <h2>Event Information</h2>
+
               <p>
-                Update the basic information
-                about your event.
+                Update the basic information about your event.
               </p>
             </div>
 
             <div className="form-grid">
-
               <div className="form-group full-width">
                 <label htmlFor="title">
                   Event title *
@@ -543,37 +498,14 @@ function EditEvent() {
                   onChange={handleChange}
                   required
                 >
-                  <option value="music">
-                    Music
-                  </option>
-
-                  <option value="party">
-                    Party
-                  </option>
-
-                  <option value="business">
-                    Business
-                  </option>
-
-                  <option value="arts">
-                    Arts
-                  </option>
-
-                  <option value="sports">
-                    Sports
-                  </option>
-
-                  <option value="education">
-                    Education
-                  </option>
-
-                  <option value="festival">
-                    Festival
-                  </option>
-
-                  <option value="other">
-                    Other
-                  </option>
+                  <option value="music">Music</option>
+                  <option value="party">Party</option>
+                  <option value="business">Business</option>
+                  <option value="arts">Arts</option>
+                  <option value="sports">Sports</option>
+                  <option value="education">Education</option>
+                  <option value="festival">Festival</option>
+                  <option value="other">Other</option>
                 </select>
               </div>
 
@@ -588,21 +520,10 @@ function EditEvent() {
                   value={form.status}
                   onChange={handleChange}
                 >
-                  <option value="draft">
-                    Draft
-                  </option>
-
-                  <option value="published">
-                    Published
-                  </option>
-
-                  <option value="cancelled">
-                    Cancelled
-                  </option>
-
-                  <option value="completed">
-                    Completed
-                  </option>
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="completed">Completed</option>
                 </select>
               </div>
 
@@ -666,10 +587,8 @@ function EditEvent() {
                   required
                 />
               </div>
-
             </div>
           </section>
-
 
           {/* EVENT IMAGE */}
 
@@ -678,13 +597,11 @@ function EditEvent() {
               <h2>Event Image</h2>
 
               <p>
-                Upload a new image if you want
-                to replace the current one.
+                Upload a new image if you want to replace the current one.
               </p>
             </div>
 
             <div className="event-image-upload">
-
               {imagePreview ? (
                 <div className="image-preview">
                   <img
@@ -708,6 +625,7 @@ function EditEvent() {
                 className="image-upload-button"
               >
                 <ImageIcon size={18} />
+
                 {imageFile
                   ? "Change Image"
                   : "Choose New Image"}
@@ -727,7 +645,6 @@ function EditEvent() {
             </div>
           </section>
 
-
           {/* TICKETS */}
 
           <section className="form-section">
@@ -736,8 +653,7 @@ function EditEvent() {
                 <h2>Ticket Types</h2>
 
                 <p>
-                  Manage the tickets available
-                  for your event.
+                  Manage the tickets available for your event.
                 </p>
               </div>
 
@@ -752,120 +668,98 @@ function EditEvent() {
             </div>
 
             <div className="ticket-edit-list">
+              {tickets.map((ticket, index) => (
+                <div
+                  className="ticket-edit-item"
+                  key={ticket._id || `ticket-${index}`}
+                >
+                  <div className="ticket-edit-title">
+                    <span>
+                      Ticket {index + 1}
+                    </span>
 
-              {tickets.map(
-                (ticket, index) => (
-                  <div
-                    className="ticket-edit-item"
-                    key={
-                      ticket._id ||
-                      `ticket-${index}`
-                    }
-                  >
-
-                    <div className="ticket-edit-title">
-                      <span>
-                        Ticket {index + 1}
-                      </span>
-
-                      {ticket.sold > 0 && (
-                        <small>
-                          {ticket.sold} sold
-                        </small>
-                      )}
-                    </div>
-
-                    <div className="ticket-form-grid">
-
-                      <div className="form-group">
-                        <label>
-                          Ticket name
-                        </label>
-
-                        <input
-                          type="text"
-                          value={ticket.name}
-                          onChange={(e) =>
-                            handleTicketChange(
-                              index,
-                              "name",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Regular"
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label>
-                          Price (₦)
-                        </label>
-
-                        <input
-                          type="number"
-                          min="0"
-                          value={ticket.price}
-                          onChange={(e) =>
-                            handleTicketChange(
-                              index,
-                              "price",
-                              e.target.value
-                            )
-                          }
-                          placeholder="2500"
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label>
-                          Quantity
-                        </label>
-
-                        <input
-                          type="number"
-                          min={ticket.sold || 1}
-                          value={ticket.quantity}
-                          onChange={(e) =>
-                            handleTicketChange(
-                              index,
-                              "quantity",
-                              e.target.value
-                            )
-                          }
-                          placeholder="150"
-                          required
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        className="remove-ticket-btn"
-                        onClick={() =>
-                          removeTicket(index)
-                        }
-                        disabled={
-                          tickets.length === 1
-                        }
-                        title="Remove ticket"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-
-                    </div>
+                    {ticket.sold > 0 && (
+                      <small>
+                        {ticket.sold} sold
+                      </small>
+                    )}
                   </div>
-                )
-              )}
 
+                  <div className="ticket-form-grid">
+                    <div className="form-group">
+                      <label>Ticket name</label>
+
+                      <input
+                        type="text"
+                        value={ticket.name}
+                        onChange={(e) =>
+                          handleTicketChange(
+                            index,
+                            "name",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Regular"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Price (₦)</label>
+
+                      <input
+                        type="number"
+                        min="0"
+                        value={ticket.price}
+                        onChange={(e) =>
+                          handleTicketChange(
+                            index,
+                            "price",
+                            e.target.value
+                          )
+                        }
+                        placeholder="2500"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Quantity</label>
+
+                      <input
+                        type="number"
+                        min={ticket.sold || 1}
+                        value={ticket.quantity}
+                        onChange={(e) =>
+                          handleTicketChange(
+                            index,
+                            "quantity",
+                            e.target.value
+                          )
+                        }
+                        placeholder="150"
+                        required
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      className="remove-ticket-btn"
+                      onClick={() => removeTicket(index)}
+                      disabled={tickets.length === 1}
+                      title="Remove ticket"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
-
 
           {/* ACTIONS */}
 
           <div className="edit-event-actions">
-
             <Link
               to="/my-events"
               className="btn btn-secondary"
@@ -893,9 +787,7 @@ function EditEvent() {
                 </>
               )}
             </button>
-
           </div>
-
         </form>
       </div>
     </main>
