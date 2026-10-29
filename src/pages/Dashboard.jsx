@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import {
   CalendarDays,
@@ -9,106 +10,210 @@ import {
   Menu,
   X,
   Scan,
-  Link as LinkIcon // Add this
+  Link as LinkIcon,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
+
+const EMPTY_STATS = {
+  totalEvents: 0,
+  totalTicketsSold: 0,
+  totalRevenue: 0,
+};
+
+function formatNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("en-NG") : "0";
+}
+
+function getEventImage(event) {
+  if (typeof event?.image === "string") return event.image;
+  return event?.image?.url || "/placeholder-event.jpg";
+}
 
 function Dashboard() {
   const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
   const [events, setEvents] = useState([]);
-  const [stats, setStats] = useState({ totalEvents: 0, totalTicketsSold: 0, totalRevenue: 0 });
+  const [stats, setStats] = useState(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [copyingId, setCopyingId] = useState(null);
+  const [copyMessage, setCopyMessage] = useState("");
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
+    let cancelled = false;
 
-    if (!storedUser) {
-      navigate("/login");
-      return;
-    }
+    async function initializeDashboard() {
+      try {
+        const storedUser = localStorage.getItem("user");
 
-    const parsedUser = JSON.parse(storedUser);
-    setUser(parsedUser);
+        if (!storedUser) {
+          navigate("/login", { replace: true });
+          return;
+        }
 
-    if (
-      parsedUser.role === "organizer" ||
-      parsedUser.role === "admin"
-    ) {
-      fetchDashboardData();
-    } else {
-      setLoading(false);
-    }
-  }, []);
+        let parsedUser;
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
+        try {
+          parsedUser = JSON.parse(storedUser);
+        } catch {
+          localStorage.removeItem("user");
+          localStorage.removeItem("token");
+          navigate("/login", { replace: true });
+          return;
+        }
 
-      // Fetch live statistics and event analytics from the organizer endpoint
-      const response = await api.get("/events/organizer/stats");
+        if (!parsedUser || typeof parsedUser !== "object") {
+          localStorage.removeItem("user");
+          localStorage.removeItem("token");
+          navigate("/login", { replace: true });
+          return;
+        }
 
-      if (response.data.success) {
-        setStats(response.data.stats || { totalEvents: 0, totalTicketsSold: 0, totalRevenue: 0 });
-        setEvents(response.data.events || []);
+        if (cancelled) return;
+
+        setUser(parsedUser);
+
+        const isOrganizer =
+          parsedUser.role === "organizer" ||
+          parsedUser.role === "admin";
+
+        if (!isOrganizer) return;
+
+        const response = await api.get("/events/organizer/stats");
+
+        if (cancelled) return;
+
+        const data = response.data || {};
+
+        // Support common API response structures.
+        const result = data.stats || data.data?.stats || {};
+        const eventList =
+          data.events ||
+          data.data?.events ||
+          (Array.isArray(data.data) ? data.data : []);
+
+        setStats({
+          totalEvents: Number(result.totalEvents) || 0,
+          totalTicketsSold: Number(result.totalTicketsSold) || 0,
+          totalRevenue: Number(result.totalRevenue) || 0,
+        });
+
+        setEvents(Array.isArray(eventList) ? eventList : []);
+      } catch (error) {
+        if (!cancelled) {
+          console.error(
+            "Unable to load dashboard analytics:",
+            error.response?.data || error.message || error
+          );
+          setEvents([]);
+          setStats(EMPTY_STATS);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } catch (error) {
-      console.error("Unable to load dashboard analytics:", error);
-    } finally {
-      setLoading(false);
     }
-  };
+
+    initializeDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
 
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    navigate("/login");
+    navigate("/login", { replace: true });
   };
 
-  if (!user) {
-    return null;
-  }
+  const copyEventLink = async (eventId) => {
+    if (!eventId) {
+      setCopyMessage("Unable to copy: event ID is missing.");
+      return;
+    }
+
+    const url = `${window.location.origin}/events/${eventId}`;
+
+    try {
+      setCopyingId(eventId);
+
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        // Fallback for browsers where Clipboard API is unavailable.
+        const textArea = document.createElement("textarea");
+        textArea.value = url;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.select();
+
+        const copied = document.execCommand("copy");
+        document.body.removeChild(textArea);
+
+        if (!copied) throw new Error("Copy command failed");
+      }
+
+      setCopyMessage("Ticket link copied successfully!");
+    } catch (error) {
+      console.error("Unable to copy ticket link:", error);
+      setCopyMessage("Copy failed. Please copy this link manually: " + url);
+    } finally {
+      setCopyingId(null);
+    }
+  };
+
+  if (!user) return null;
 
   const isOrganizer =
-    user.role === "organizer" ||
-    user.role === "admin";
-    const copyEventLink = (e, eventId) => {
-    e.preventDefault(); // Prevents the card's main <Link> wrapper from redirecting
-    const url = `${window.location.origin}/events/${eventId}`;
-    navigator.clipboard.writeText(url);
-    alert("Ticket link copied! You can now paste and share this with attendees.");
-  };
+    user.role === "organizer" || user.role === "admin";
+
+  const userName =
+    typeof user.name === "string" && user.name.trim()
+      ? user.name.trim()
+      : "User";
+
+  const firstName = userName.split(/\s+/)[0];
 
   return (
     <div className="dashboard">
-
       {/* MOBILE TOP BAR */}
       <div className="mobile-dashboard-header">
         <button
+          type="button"
           onClick={() => setSidebarOpen(true)}
           className="dashboard-menu-btn"
+          aria-label="Open navigation"
         >
           <Menu size={22} />
         </button>
         <strong>Tikora</strong>
       </div>
 
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="dashboard-overlay"
+          aria-label="Close navigation"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* SIDEBAR */}
       <aside
-        className={`dashboard-sidebar ${
-          sidebarOpen ? "open" : ""
-        }`}
+        className={`dashboard-sidebar ${sidebarOpen ? "open" : ""}`}
       >
         <div className="sidebar-top">
-          <div className="dashboard-logo">
-            EVENTA
-          </div>
+          <div className="dashboard-logo">TIKORA</div>
+
           <button
+            type="button"
             className="sidebar-close"
             onClick={() => setSidebarOpen(false)}
+            aria-label="Close navigation"
           >
             <X size={20} />
           </button>
@@ -116,15 +221,12 @@ function Dashboard() {
 
         <div className="sidebar-user">
           <div className="user-avatar">
-            {user.name.charAt(0).toUpperCase()}
+            {firstName.charAt(0).toUpperCase()}
           </div>
+
           <div>
-            <strong>{user.name}</strong>
-            <span>
-              {isOrganizer
-                ? "Organizer"
-                : "Ticket buyer"}
-            </span>
+            <strong>{userName}</strong>
+            <span>{isOrganizer ? "Organizer" : "Ticket buyer"}</span>
           </div>
         </div>
 
@@ -163,6 +265,14 @@ function Dashboard() {
                 <Scan size={18} />
                 Ticket Scanner
               </Link>
+
+              <Link
+                to="/wallet"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Wallet size={18} />
+                Revenue
+              </Link>
             </>
           )}
 
@@ -173,20 +283,11 @@ function Dashboard() {
             <Ticket size={18} />
             My Tickets
           </Link>
-
-          {isOrganizer && (
-            <Link
-              to="/wallet"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <Wallet size={18} />
-              Revenue
-            </Link>
-          )}
         </nav>
 
         <div className="sidebar-bottom">
           <button
+            type="button"
             onClick={logout}
             className="logout-btn"
           >
@@ -203,29 +304,39 @@ function Dashboard() {
             <span className="dashboard-eyebrow">
               {isOrganizer ? "ORGANIZER DASHBOARD" : "MY DASHBOARD"}
             </span>
-            <h1>
-              Welcome back, {user.name.split(" ")[0]} 
-            </h1>
+
+            <h1>Welcome back, {firstName}</h1>
+
             <p>
               {isOrganizer
-                ? "Monitor your active events, gross earnings, and ticket metrics."
+                ? "Monitor your events, ticket sales, and revenue."
                 : "Discover events and manage your tickets."}
             </p>
           </div>
 
           {isOrganizer && (
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                flexWrap: "wrap",
+              }}
+            >
               <Link
                 to="/organizer/scanner"
                 className="btn btn-outline"
-                style={{ display: "flex", alignItems: "center", gap: "6px", background: "white" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: "white",
+                }}
               >
-                <Scan size={18} /> Scanner
+                <Scan size={18} />
+                Scanner
               </Link>
-              <Link
-                to="/create-event"
-                className="btn btn-primary"
-              >
+
+              <Link to="/create-event" className="btn btn-primary">
                 <Plus size={18} />
                 Create Event
               </Link>
@@ -233,45 +344,51 @@ function Dashboard() {
           )}
         </header>
 
-        {/* STATISTICS */}
-        <section className="dashboard-stats">
-          <div className="dashboard-stat">
-            <div className="stat-icon">
-              <CalendarDays size={20} />
+        {/* ORGANIZER STATISTICS */}
+        {isOrganizer && (
+          <section className="dashboard-stats">
+            <div className="dashboard-stat">
+              <div className="stat-icon">
+                <CalendarDays size={20} />
+              </div>
+              <div>
+                <span>Total Events</span>
+                <strong>{formatNumber(stats.totalEvents)}</strong>
+              </div>
             </div>
-            <div>
-              <span>Total Events</span>
-              <strong>{stats.totalEvents}</strong>
-            </div>
-          </div>
 
-          <div className="dashboard-stat">
-            <div className="stat-icon">
-              <Ticket size={20} />
+            <div className="dashboard-stat">
+              <div className="stat-icon">
+                <Ticket size={20} />
+              </div>
+              <div>
+                <span>Tickets Sold</span>
+                <strong>{formatNumber(stats.totalTicketsSold)}</strong>
+              </div>
             </div>
-            <div>
-              <span>Tickets Sold</span>
-              <strong>{stats.totalTicketsSold.toLocaleString()}</strong>
-            </div>
-          </div>
 
-          <div className="dashboard-stat">
-            <div className="stat-icon">
-              <Wallet size={20} />
+            <div className="dashboard-stat">
+              <div className="stat-icon">
+                <Wallet size={20} />
+              </div>
+              <div>
+                <span>Gross Revenue</span>
+                <strong>₦{formatNumber(stats.totalRevenue)}</strong>
+              </div>
             </div>
-            <div>
-              <span>Gross Revenue</span>
-              <strong>₦{stats.totalRevenue.toLocaleString()}</strong>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* EVENTS */}
         <section className="dashboard-events">
           <div className="section-heading">
             <div>
-              <span>EVENT MANAGEMENT</span>
-              <h2>Your Events Performance</h2>
+              <span>
+                {isOrganizer ? "EVENT MANAGEMENT" : "YOUR TICKETS"}
+              </span>
+              <h2>
+                {isOrganizer ? "Your Events Performance" : "Manage Your Tickets"}
+              </h2>
             </div>
 
             {isOrganizer && events.length > 0 && (
@@ -284,7 +401,18 @@ function Dashboard() {
 
           {loading ? (
             <div className="dashboard-empty">
-              <p>Loading your analytics and events...</p>
+              <p>Loading your dashboard...</p>
+            </div>
+          ) : !isOrganizer ? (
+            <div className="dashboard-empty">
+              <div className="empty-icon">
+                <Ticket size={28} />
+              </div>
+              <h3>Ready for your next event?</h3>
+              <p>Explore upcoming events and find your next experience.</p>
+              <Link to="/events" className="btn btn-primary">
+                Explore Events
+              </Link>
             </div>
           ) : events.length === 0 ? (
             <div className="dashboard-empty">
@@ -293,73 +421,143 @@ function Dashboard() {
               </div>
               <h3>No events yet</h3>
               <p>
-                You haven't created any events.
-                Start by creating your first event.
+                You haven't created any events yet. Start by creating your
+                first event.
               </p>
-
-              {isOrganizer && (
-                <Link
-                  to="/create-event"
-                  className="btn btn-primary"
-                >
-                  <Plus size={18} />
-                  Create your first event
-                </Link>
-              )}
+              <Link to="/create-event" className="btn btn-primary">
+                <Plus size={18} />
+                Create your first event
+              </Link>
             </div>
           ) : (
-           <div className="dashboard-event-grid">
-  {events.slice(0, 6).map((event) => (
-    <Link
-      to={`/events/${event._id}`}
-      className="dashboard-event-card"
-      key={event._id}
-    >
-      <div className="dashboard-event-image">
-        <img
-          src={
-            event.image?.url ||
-            event.image ||
-            "/placeholder-event.jpg"
-          }
-          alt={event.title}
-        />
-      </div>
+            <div className="dashboard-event-grid">
+              {events.slice(0, 6).map((event) => {
+                const eventId = event._id || event.id;
+                const sold = Number(event.eventTicketsSold) || 0;
+                const capacity = Number(event.eventCapacity);
 
-      <div className="dashboard-event-content">
-        <span>
-          {event.category || "Event"}
-        </span>
-        <h3>
-          {event.title}
-        </h3>
-        <p style={{ marginBottom: "10px" }}>
-          {event.venue}
-        </p>
+                return (
+                  <article
+                    className="dashboard-event-card"
+                    key={eventId}
+                  >
+                    <Link
+                      to={`/events/${eventId}`}
+                      className="dashboard-event-card-link"
+                    >
+                      <div className="dashboard-event-image">
+                        <img
+                          src={getEventImage(event)}
+                          alt={event.title || "Event"}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = "/placeholder-event.jpg";
+                          }}
+                        />
+                      </div>
 
-        <div style={{ background: "#f8f8f6", border: "1px solid #eee", borderRadius: "8px", padding: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto" }}>
-          <div>
-            <span style={{ fontSize: "10px", color: "#888", textTransform: "uppercase", fontWeight: "bold", display: "block" }}>Sold</span>
-            <strong style={{ fontSize: "13px", color: "#111" }}>{event.eventTicketsSold} / {event.eventCapacity}</strong>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <span style={{ fontSize: "10px", color: "#888", textTransform: "uppercase", fontWeight: "bold", display: "block" }}>Earned</span>
-            <strong style={{ fontSize: "13px", color: "var(--primary)" }}>₦{event.eventRevenue ? event.eventRevenue.toLocaleString() : "0"}</strong>
-          </div>
-        </div>
+                      <div className="dashboard-event-content">
+                        <span>{event.category || "Event"}</span>
+                        <h3>{event.title || "Untitled event"}</h3>
+                        <p style={{ marginBottom: "10px" }}>
+                          {event.venue || event.location || "Venue not specified"}
+                        </p>
+                      </div>
+                    </Link>
 
-        {/* COPY TICKET LINK BUTTON */}
-        <button 
-          onClick={(e) => copyEventLink(e, event._id)}
-          style={{ marginTop: "10px", width: "100%", padding: "10px", background: "white", border: "1px solid var(--primary)", color: "var(--primary)", borderRadius: "8px", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", fontWeight: "bold", fontSize: "13px", cursor: "pointer" }}
-        >
-          <LinkIcon size={16} />
-          Copy Ticket Link
-        </button>
-      </div>
-    </Link>
-  ))}
-</div>
+                    <div
+                      style={{
+                        background: "#f8f8f6",
+                        border: "1px solid #eee",
+                        borderRadius: "8px",
+                        padding: "10px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "10px",
+                        marginTop: "auto",
+                      }}
+                    >
+                      <div>
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            color: "#888",
+                            textTransform: "uppercase",
+                            fontWeight: "bold",
+                            display: "block",
+                          }}
+                        >
+                          Sold
+                        </span>
+                        <strong style={{ fontSize: "13px", color: "#111" }}>
+                          {formatNumber(sold)} /{" "}
+                          {Number.isFinite(capacity)
+                            ? formatNumber(capacity)
+                            : "N/A"}
+                        </strong>
+                      </div>
+
+                      <div style={{ textAlign: "right" }}>
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            color: "#888",
+                            textTransform: "uppercase",
+                            fontWeight: "bold",
+                            display: "block",
+                          }}
+                        >
+                          Earned
+                        </span>
+                        <strong
+                          style={{
+                            fontSize: "13px",
+                            color: "var(--primary)",
+                          }}
+                        >
+                          ₦{formatNumber(event.eventRevenue)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => copyEventLink(eventId)}
+                      disabled={!eventId || copyingId === eventId}
+                      style={{
+                        marginTop: "10px",
+                        width: "100%",
+                        padding: "10px",
+                        background: "white",
+                        border: "1px solid var(--primary)",
+                        color: "var(--primary)",
+                        borderRadius: "8px",
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontWeight: "bold",
+                        fontSize: "13px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <LinkIcon size={16} />
+                      {copyingId === eventId ? "Copying..." : "Copy Ticket Link"}
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          {copyMessage && (
+            <p
+              role="status"
+              style={{ marginTop: "12px", overflowWrap: "anywhere" }}
+            >
+              {copyMessage}
+            </p>
           )}
         </section>
       </main>
