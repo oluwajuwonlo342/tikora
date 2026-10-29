@@ -112,49 +112,30 @@ function EditEvent() {
     }
   };
 
-  // Format a stored timestamp as Nigerian wall-clock time for datetime-local.
-  // datetime-local values do not contain a timezone, so never use the browser's
-  // implicit timezone here.
-  const formatDateForInput = (value) => {
-    if (!value) return "";
+  const formatDateForInput = (date) => {
+    if (!date) return "";
 
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Africa/Lagos",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(date);
-
-    const part = (type) => parts.find((item) => item.type === type)?.value || "";
-
-    return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
-  };
-
-  // Convert the wall-clock time selected in Nigeria to a real UTC timestamp.
-  // Example: 2026-10-29T09:00 in Lagos becomes 2026-10-29T08:00:00.000Z.
-  const convertNigerianTimeToISO = (value) => {
-    if (!value) return "";
-
-    // A datetime-local input normally returns YYYY-MM-DDTHH:mm.
-    // Include seconds if the value has them, without duplicating them.
-    const normalized = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
-      ? `${value}:00`
-      : value;
-
-    const withNigeriaOffset = `${normalized}+01:00`;
-    const parsedDate = new Date(withNigeriaOffset);
+    const parsedDate = new Date(date);
 
     if (Number.isNaN(parsedDate.getTime())) {
-      throw new Error("Invalid event date or time.");
+      return "";
     }
 
-    return parsedDate.toISOString();
+    const year = parsedDate.getFullYear();
+    const month = String(
+      parsedDate.getMonth() + 1
+    ).padStart(2, "0");
+    const day = String(
+      parsedDate.getDate()
+    ).padStart(2, "0");
+    const hours = String(
+      parsedDate.getHours()
+    ).padStart(2, "0");
+    const minutes = String(
+      parsedDate.getMinutes()
+    ).padStart(2, "0");
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
   const handleChange = (e) => {
@@ -348,14 +329,15 @@ function EditEvent() {
 
       formData.append(
         "date",
-        convertNigerianTimeToISO(form.date)
+        form.date
       );
 
-      // Send an empty value too, so clearing the end date clears it in MongoDB.
-      formData.append(
-        "endDate",
-        form.endDate ? convertNigerianTimeToISO(form.endDate) : ""
-      );
+      if (form.endDate) {
+        formData.append(
+          "endDate",
+          form.endDate
+        );
+      }
 
       formData.append(
         "venue",
