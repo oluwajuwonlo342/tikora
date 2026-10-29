@@ -112,7 +112,7 @@ function EditEvent() {
     }
   };
 
-  // Format stored timestamps as Nigerian local time.
+  // Format a stored timestamp as Nigerian wall-clock time.
   const formatDateForInput = (value) => {
     if (!value) return "";
 
@@ -136,8 +136,8 @@ function EditEvent() {
     return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
   };
 
-  // Convert Nigerian local time to a UTC timestamp before saving.
-  // Example: 9:00 AM in Lagos becomes 8:00 AM UTC.
+  // Convert Nigerian local time to an unambiguous ISO timestamp.
+  // Example: 9:00 AM in Lagos becomes 08:00 UTC.
   const convertNigerianTimeToISO = (value) => {
     if (!value) return "";
 
@@ -189,9 +189,7 @@ function EditEvent() {
   };
 
   const removeTicket = (index) => {
-    if (tickets.length === 1) {
-      return;
-    }
+    if (tickets.length === 1) return;
 
     setTickets((prev) =>
       prev.filter((_, ticketIndex) => ticketIndex !== index)
@@ -246,10 +244,8 @@ function EditEvent() {
     }
 
     if (form.endDate) {
-      const startDate = new Date(form.date);
-      const endDate = new Date(form.endDate);
-
-      if (endDate <= startDate) {
+      // Compare the local datetime-local strings directly.
+      if (form.endDate <= form.date) {
         return "End date must be after the event start date.";
       }
     }
@@ -267,6 +263,7 @@ function EditEvent() {
 
       if (
         ticket.price === "" ||
+        !Number.isFinite(Number(ticket.price)) ||
         Number(ticket.price) < 0
       ) {
         return `Enter a valid price for ticket ${i + 1}.`;
@@ -274,6 +271,7 @@ function EditEvent() {
 
       if (
         ticket.quantity === "" ||
+        !Number.isFinite(Number(ticket.quantity)) ||
         Number(ticket.quantity) < 1
       ) {
         return `Enter a valid quantity for ticket ${i + 1}.`;
@@ -300,12 +298,10 @@ function EditEvent() {
 
     if (validationError) {
       setError(validationError);
-
       window.scrollTo({
         top: 0,
         behavior: "smooth",
       });
-
       return;
     }
 
@@ -323,12 +319,13 @@ function EditEvent() {
         convertNigerianTimeToISO(form.date)
       );
 
-      if (form.endDate) {
-        formData.append(
-          "endDate",
-          convertNigerianTimeToISO(form.endDate)
-        );
-      }
+      // Send an empty value when the organizer clears the end date.
+      formData.append(
+        "endDate",
+        form.endDate
+          ? convertNigerianTimeToISO(form.endDate)
+          : ""
+      );
 
       formData.append("venue", form.venue.trim());
       formData.append("location", form.location.trim());
@@ -350,10 +347,7 @@ function EditEvent() {
 
       console.log("Updating event:", id);
 
-      const response = await api.put(
-        `/events/${id}`,
-        formData
-      );
+      const response = await api.put(`/events/${id}`, formData);
 
       console.log("UPDATE EVENT RESPONSE:", response.data);
 
@@ -380,6 +374,7 @@ function EditEvent() {
 
       setError(
         error.response?.data?.message ||
+          error.message ||
           "Unable to update event. Please try again."
       );
     } finally {
@@ -406,10 +401,7 @@ function EditEvent() {
   return (
     <main className="edit-event-page">
       <div className="container">
-        <Link
-          to="/my-events"
-          className="back-link"
-        >
+        <Link to="/my-events" className="back-link">
           <ArrowLeft size={17} />
           Back to My Events
         </Link>
@@ -417,9 +409,7 @@ function EditEvent() {
         <div className="edit-event-header">
           <div>
             <span className="page-label">ORGANIZER</span>
-
             <h1>Edit Event</h1>
-
             <p>
               Update your event information, tickets, and event image.
             </p>
@@ -438,27 +428,16 @@ function EditEvent() {
           </div>
         )}
 
-        <form
-          onSubmit={handleSubmit}
-          className="edit-event-form"
-        >
-          {/* EVENT INFORMATION */}
-
+        <form onSubmit={handleSubmit} className="edit-event-form">
           <section className="form-section">
             <div className="form-section-header">
               <h2>Event Information</h2>
-
-              <p>
-                Update the basic information about your event.
-              </p>
+              <p>Update the basic information about your event.</p>
             </div>
 
             <div className="form-grid">
               <div className="form-group full-width">
-                <label htmlFor="title">
-                  Event title *
-                </label>
-
+                <label htmlFor="title">Event title *</label>
                 <input
                   id="title"
                   name="title"
@@ -471,10 +450,7 @@ function EditEvent() {
               </div>
 
               <div className="form-group full-width">
-                <label htmlFor="description">
-                  Description *
-                </label>
-
+                <label htmlFor="description">Description *</label>
                 <textarea
                   id="description"
                   name="description"
@@ -487,10 +463,7 @@ function EditEvent() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="category">
-                  Category *
-                </label>
-
+                <label htmlFor="category">Category *</label>
                 <select
                   id="category"
                   name="category"
@@ -510,10 +483,7 @@ function EditEvent() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="status">
-                  Event Status
-                </label>
-
+                <label htmlFor="status">Event Status</label>
                 <select
                   id="status"
                   name="status"
@@ -528,10 +498,7 @@ function EditEvent() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="date">
-                  Start date & time *
-                </label>
-
+                <label htmlFor="date">Start date &amp; time *</label>
                 <input
                   id="date"
                   name="date"
@@ -543,10 +510,7 @@ function EditEvent() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="endDate">
-                  End date & time
-                </label>
-
+                <label htmlFor="endDate">End date &amp; time</label>
                 <input
                   id="endDate"
                   name="endDate"
@@ -557,10 +521,7 @@ function EditEvent() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="venue">
-                  Venue *
-                </label>
-
+                <label htmlFor="venue">Venue *</label>
                 <input
                   id="venue"
                   name="venue"
@@ -573,10 +534,7 @@ function EditEvent() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="location">
-                  Location *
-                </label>
-
+                <label htmlFor="location">Location *</label>
                 <input
                   id="location"
                   name="location"
@@ -590,12 +548,9 @@ function EditEvent() {
             </div>
           </section>
 
-          {/* EVENT IMAGE */}
-
           <section className="form-section">
             <div className="form-section-header">
               <h2>Event Image</h2>
-
               <p>
                 Upload a new image if you want to replace the current one.
               </p>
@@ -608,8 +563,7 @@ function EditEvent() {
                     src={imagePreview}
                     alt="Event preview"
                     onError={(e) => {
-                      e.currentTarget.src =
-                        "/placeholder-event.jpg";
+                      e.currentTarget.src = "/placeholder-event.jpg";
                     }}
                   />
                 </div>
@@ -625,10 +579,7 @@ function EditEvent() {
                 className="image-upload-button"
               >
                 <ImageIcon size={18} />
-
-                {imageFile
-                  ? "Change Image"
-                  : "Choose New Image"}
+                {imageFile ? "Change Image" : "Choose New Image"}
               </label>
 
               <input
@@ -639,22 +590,15 @@ function EditEvent() {
                 hidden
               />
 
-              <small>
-                JPG, PNG, WEBP — maximum 5MB
-              </small>
+              <small>JPG, PNG, WEBP — maximum 5MB</small>
             </div>
           </section>
-
-          {/* TICKETS */}
 
           <section className="form-section">
             <div className="form-section-header ticket-header">
               <div>
                 <h2>Ticket Types</h2>
-
-                <p>
-                  Manage the tickets available for your event.
-                </p>
+                <p>Manage the tickets available for your event.</p>
               </div>
 
               <button
@@ -674,21 +618,16 @@ function EditEvent() {
                   key={ticket._id || `ticket-${index}`}
                 >
                   <div className="ticket-edit-title">
-                    <span>
-                      Ticket {index + 1}
-                    </span>
+                    <span>Ticket {index + 1}</span>
 
                     {ticket.sold > 0 && (
-                      <small>
-                        {ticket.sold} sold
-                      </small>
+                      <small>{ticket.sold} sold</small>
                     )}
                   </div>
 
                   <div className="ticket-form-grid">
                     <div className="form-group">
                       <label>Ticket name</label>
-
                       <input
                         type="text"
                         value={ticket.name}
@@ -706,7 +645,6 @@ function EditEvent() {
 
                     <div className="form-group">
                       <label>Price (₦)</label>
-
                       <input
                         type="number"
                         min="0"
@@ -725,7 +663,6 @@ function EditEvent() {
 
                     <div className="form-group">
                       <label>Quantity</label>
-
                       <input
                         type="number"
                         min={ticket.sold || 1}
@@ -757,13 +694,8 @@ function EditEvent() {
             </div>
           </section>
 
-          {/* ACTIONS */}
-
           <div className="edit-event-actions">
-            <Link
-              to="/my-events"
-              className="btn btn-secondary"
-            >
+            <Link to="/my-events" className="btn btn-secondary">
               Cancel
             </Link>
 
