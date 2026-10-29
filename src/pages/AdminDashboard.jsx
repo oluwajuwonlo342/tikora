@@ -1,87 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  CreditCard,
-  Calendar,
-  Users,
-  CheckCircle,
-  Loader,
-  LogOut,
-  ShieldAlert,
-  Trash2,
-  Menu,
-  X,
-  History
+  LayoutDashboard, CreditCard, Calendar, Users,
+  CheckCircle, Loader, LogOut, ShieldAlert, Trash2, Menu, X, History
 } from 'lucide-react';
 import api from '../services/api';
 
-// Works out when a payout was approved.
-const getApprovalDate = (p) =>
-  p?.approvedAt ||
-  p?.processedAt ||
-  p?.paidAt ||
-  p?.updatedAt ||
-  p?.createdAt;
+// Works out when a payout was approved (uses whichever date field your backend sends)
+const getApprovalDate = (p) => p.approvedAt || p.processedAt || p.paidAt || p.updatedAt || p.createdAt;
 
-// Nigeria timezone
-const TIME_ZONE = 'Africa/Lagos';
+const formatDate = (d) =>
+  d ? new Date(d).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
-// Safely format numbers and currency values.
-const formatNumber = (value) => {
-  const number = Number(value ?? 0);
-
-  return Number.isFinite(number)
-    ? number.toLocaleString('en-NG')
-    : '0';
-};
-
-// Safely format dates in Nigerian time.
-const formatDate = (value) => {
-  if (!value) return '—';
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return '—';
-
-  return new Intl.DateTimeFormat('en-NG', {
-    timeZone: TIME_ZONE,
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(date);
-};
-
-// Safely format times in Nigerian time.
-const formatTime = (value) => {
-  if (!value) return '—';
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return '—';
-
-  return new Intl.DateTimeFormat('en-NG', {
-    timeZone: TIME_ZONE,
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true,
-  }).format(date);
-};
+const formatTime = (d) =>
+  d ? new Date(d).toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }) : '—';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const [stats, setStats] = useState({
-    totalRevenue: 0,
-    totalUsers: 0,
-    activeEvents: 0,
-  });
-
+  // Live State Data
+  const [stats, setStats] = useState({ totalRevenue: 0, totalUsers: 0, activeEvents: 0 });
   const [usersList, setUsersList] = useState([]);
   const [eventsList, setEventsList] = useState([]);
   const [pendingPayouts, setPendingPayouts] = useState([]);
@@ -89,22 +30,11 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const userString = localStorage.getItem('user');
-
     if (!userString) {
       navigate('/admin/login');
       return;
     }
-
-    let user;
-
-    try {
-      user = JSON.parse(userString);
-    } catch {
-      localStorage.removeItem('user');
-      navigate('/admin/login');
-      return;
-    }
-
+    const user = JSON.parse(userString);
     if (user.role !== 'admin') {
       navigate('/dashboard');
       return;
@@ -112,68 +42,31 @@ const AdminDashboard = () => {
 
     const fetchAdminData = async () => {
       setLoading(true);
-
       try {
-        const [
-          statsRes,
-          usersRes,
-          eventsRes,
-          payoutsRes,
-        ] = await Promise.all([
+        const [statsRes, usersRes, eventsRes, payoutsRes] = await Promise.all([
           api.get('/admin/stats'),
           api.get('/admin/users'),
           api.get('/admin/events'),
-          api.get('/payouts/admin/all'),
+          api.get('/payouts/admin/all')
         ]);
 
-        if (statsRes.data?.success) {
-          const apiStats = statsRes.data.stats || {};
+        if (statsRes.data.success) setStats(statsRes.data.stats);
+        if (usersRes.data.success) setUsersList(usersRes.data.users);
+        if (eventsRes.data.success) setEventsList(eventsRes.data.events);
 
-          setStats({
-            totalRevenue: Number(apiStats.totalRevenue ?? 0),
-            totalUsers: Number(apiStats.totalUsers ?? 0),
-            activeEvents: Number(apiStats.activeEvents ?? 0),
-          });
-        }
+        if (payoutsRes.data.success) {
+          const all = payoutsRes.data.payouts;
 
-        if (usersRes.data?.success) {
-          setUsersList(
-            Array.isArray(usersRes.data.users)
-              ? usersRes.data.users
-              : []
-          );
-        }
+          setPendingPayouts(all.filter(p => p.status === 'pending'));
 
-        if (eventsRes.data?.success) {
-          setEventsList(
-            Array.isArray(eventsRes.data.events)
-              ? eventsRes.data.events
-              : []
-          );
-        }
-
-        if (payoutsRes.data?.success) {
-          const all = Array.isArray(payoutsRes.data.payouts)
-            ? payoutsRes.data.payouts
-            : [];
-
-          setPendingPayouts(
-            all.filter((p) => p.status === 'pending')
-          );
-
+          // History = everything that is no longer pending, newest first
           const history = all
-            .filter((p) => p.status !== 'pending')
-            .sort((a, b) => {
-              const dateA = new Date(getApprovalDate(a) || 0).getTime();
-              const dateB = new Date(getApprovalDate(b) || 0).getTime();
-
-              return dateB - dateA;
-            });
-
+            .filter(p => p.status !== 'pending')
+            .sort((a, b) => new Date(getApprovalDate(b)) - new Date(getApprovalDate(a)));
           setPayoutHistory(history);
         }
       } catch (error) {
-        console.error('Failed to load admin data:', error);
+        console.error("Failed to load admin data", error);
       } finally {
         setLoading(false);
       }
@@ -189,361 +82,122 @@ const AdminDashboard = () => {
   };
 
   // ==========================================
-  // APPROVE PAYOUT — MANUAL BANK TRANSFER
+  // APPROVE PAYOUT — MANUAL TRANSFER
+  //
+  // The backend no longer calls Paystack's Transfer API (Starter Business
+  // accounts can't send to third parties). Instead, you send the money
+  // yourself via your own bank app using the bank details shown in the
+  // table below, then enter that transfer's reference here as proof
+  // before the payout is marked approved.
   // ==========================================
   const handleApprovePayout = async (payoutId) => {
     const paymentReference = window.prompt(
-      'Enter the bank transaction reference for the transfer you just sent to the organizer:'
+      "Enter the bank transaction reference for the transfer you just sent to the organizer:"
     );
 
-    if (paymentReference === null) return;
+    if (paymentReference === null) return; // user cancelled
 
     if (!paymentReference.trim()) {
-      alert('A payment reference is required to approve this payout.');
+      alert("A payment reference is required to approve this payout.");
       return;
     }
 
     try {
-      const res = await api.post(
-        `/payouts/admin/approve/${payoutId}`,
-        {
-          paymentReference: paymentReference.trim(),
-        }
-      );
-
-      if (res.data?.success) {
-        const approved = pendingPayouts.find(
-          (p) => p._id === payoutId
-        );
+      const res = await api.post(`/payouts/admin/approve/${payoutId}`, {
+        paymentReference: paymentReference.trim()
+      });
+      if (res.data.success) {
+        const approved = pendingPayouts.find(p => p._id === payoutId);
 
         if (approved) {
-          setPayoutHistory((prev) => [
+          // Add it to the history straight away with the time of approval
+          setPayoutHistory(prev => [
             {
               ...approved,
               ...(res.data.payout || {}),
               status: res.data.payout?.status || 'approved',
-              paymentReference:
-                res.data.payout?.paymentReference ||
-                paymentReference.trim(),
-              approvedAt:
-                res.data.payout?.approvedAt ||
-                new Date().toISOString(),
+              paymentReference: res.data.payout?.paymentReference || paymentReference.trim(),
+              approvedAt: res.data.payout?.approvedAt || new Date().toISOString()
             },
-            ...prev,
+            ...prev
           ]);
         }
 
-        setPendingPayouts((prev) =>
-          prev.filter((p) => p._id !== payoutId)
-        );
-
-        alert('Payout marked as approved and paid.');
-        setActiveTab('history');
+        setPendingPayouts(prev => prev.filter(p => p._id !== payoutId));
+        alert("Payout marked as approved and paid.");
+        setActiveTab('history'); // show the history right after approving
       } else {
-        alert(res.data?.message || 'Failed to approve payout.');
+        alert(res.data.message || "Failed to approve payout.");
       }
     } catch (error) {
-      console.error('Approve payout error:', error);
-
-      alert(
-        error.response?.data?.message ||
-        'Server error while processing payout.'
-      );
+      console.error(error);
+      alert(error.response?.data?.message || "Server error while processing payout.");
     }
   };
 
-  // ==========================================
-  // OVERVIEW CARDS
-  // ==========================================
+  // --- RENDERERS ---
+
   const renderOverview = () => (
     <div className="stat-grid">
-      <div
-        style={{
-          padding: '30px',
-          background: 'white',
-          borderRadius: '16px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-        }}
-      >
-        <span
-          style={{
-            color: '#888',
-            fontSize: '13px',
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-          }}
-        >
-          Platform Revenue (7% Fees)
-        </span>
-
-        <h3
-          style={{
-            color: '#111',
-            fontSize: '36px',
-            margin: '10px 0 0',
-          }}
-        >
-          ₦{formatNumber(stats?.totalRevenue)}
-        </h3>
+      <div style={{ padding: '30px', background: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <span style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>Platform Revenue (7% Fees)</span>
+        <h3 style={{ color: '#111', fontSize: '36px', margin: '10px 0 0 0' }}>₦{stats.totalRevenue.toLocaleString()}</h3>
       </div>
-
-      <div
-        style={{
-          padding: '30px',
-          background: 'white',
-          borderRadius: '16px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-        }}
-      >
-        <span
-          style={{
-            color: '#888',
-            fontSize: '13px',
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-          }}
-        >
-          Total Registered Users
-        </span>
-
-        <h3
-          style={{
-            color: 'var(--primary)',
-            fontSize: '36px',
-            margin: '10px 0 0',
-          }}
-        >
-          {formatNumber(stats?.totalUsers)}
-        </h3>
+      <div style={{ padding: '30px', background: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <span style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>Total Registered Users</span>
+        <h3 style={{ color: 'var(--primary)', fontSize: '36px', margin: '10px 0 0 0' }}>{stats.totalUsers}</h3>
       </div>
-
-      <div
-        style={{
-          padding: '30px',
-          background: 'white',
-          borderRadius: '16px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-        }}
-      >
-        <span
-          style={{
-            color: '#888',
-            fontSize: '13px',
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-          }}
-        >
-          Active Events
-        </span>
-
-        <h3
-          style={{
-            color: '#00b060',
-            fontSize: '36px',
-            margin: '10px 0 0',
-          }}
-        >
-          {formatNumber(stats?.activeEvents)}
-        </h3>
+      <div style={{ padding: '30px', background: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <span style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>Active Events</span>
+        <h3 style={{ color: '#00b060', fontSize: '36px', margin: '10px 0 0 0' }}>{stats.activeEvents}</h3>
       </div>
     </div>
   );
 
-  // ==========================================
-  // REUSABLE TABLE
-  // ==========================================
   const renderTable = (headers, data, renderRow) => (
-    <div
-      style={{
-        background: 'white',
-        borderRadius: '16px',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-        overflowX: 'auto',
-        WebkitOverflowScrolling: 'touch',
-      }}
-    >
-      <table
-        style={{
-          width: '100%',
-          minWidth: '700px',
-          textAlign: 'left',
-          borderCollapse: 'collapse',
-        }}
-      >
-        <thead
-          style={{
-            background: '#f8f9fa',
-            borderBottom: '2px solid #eee',
-          }}
-        >
+    <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <table style={{ width: '100%', minWidth: '700px', textAlign: 'left', borderCollapse: 'collapse' }}>
+        <thead style={{ background: '#f8f9fa', borderBottom: '2px solid #eee' }}>
           <tr>
-            {headers.map((header, index) => (
-              <th
-                key={index}
-                style={{
-                  padding: '18px 25px',
-                  color: '#555',
-                  fontSize: '14px',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {header}
-              </th>
-            ))}
+            {headers.map((h, i) => <th key={i} style={{ padding: '18px 25px', color: '#555', fontSize: '14px', whiteSpace: 'nowrap' }}>{h}</th>)}
           </tr>
         </thead>
-
         <tbody>
-          {data.length > 0 ? (
-            data.map(renderRow)
-          ) : (
-            <tr>
-              <td
-                colSpan={headers.length}
-                style={{
-                  padding: '30px',
-                  textAlign: 'center',
-                  color: '#888',
-                }}
-              >
-                No records found.
-              </td>
-            </tr>
+          {data.length > 0 ? data.map(renderRow) : (
+            <tr><td colSpan={headers.length} style={{ padding: '30px', textAlign: 'center', color: '#888' }}>No records found.</td></tr>
           )}
         </tbody>
       </table>
     </div>
   );
 
-  // ==========================================
-  // PAYOUT HISTORY
-  // ==========================================
   const renderPayoutHistory = () => {
-    const totalPaidOut = payoutHistory.reduce(
-      (sum, payout) =>
-        sum + (Number(payout.amount) || 0),
-      0
-    );
+    const totalPaidOut = payoutHistory.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     return (
       <>
-        <div
-          style={{
-            padding: '25px 30px',
-            background: 'white',
-            borderRadius: '16px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-            marginBottom: '25px',
-            display: 'inline-block',
-            minWidth: '260px',
-          }}
-        >
-          <span
-            style={{
-              color: '#888',
-              fontSize: '13px',
-              textTransform: 'uppercase',
-              letterSpacing: '1px',
-            }}
-          >
-            Total Paid Out
-          </span>
-
-          <h3
-            style={{
-              color: '#00b060',
-              fontSize: '32px',
-              margin: '8px 0 0',
-            }}
-          >
-            ₦{formatNumber(totalPaidOut)}
-          </h3>
-
-          <span style={{ color: '#999', fontSize: '13px' }}>
-            {payoutHistory.length} payout
-            {payoutHistory.length === 1 ? '' : 's'}
-          </span>
+        <div style={{ padding: '25px 30px', background: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginBottom: '25px', display: 'inline-block', minWidth: '260px' }}>
+          <span style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>Total Paid Out</span>
+          <h3 style={{ color: '#00b060', fontSize: '32px', margin: '8px 0 0 0' }}>₦{totalPaidOut.toLocaleString()}</h3>
+          <span style={{ color: '#999', fontSize: '13px' }}>{payoutHistory.length} payout{payoutHistory.length === 1 ? '' : 's'}</span>
         </div>
 
         {renderTable(
-          [
-            'Date',
-            'Time',
-            'Organizer',
-            'Event',
-            'Amount',
-            'Payment Reference',
-            'Status',
-          ],
+          ['Date', 'Time', 'Organizer', 'Event', 'Amount', 'Payment Reference', 'Status'],
           payoutHistory,
-          (payout) => {
-            const when = getApprovalDate(payout);
-
+          (p) => {
+            const when = getApprovalDate(p);
             return (
-              <tr
-                key={payout._id}
-                style={{ borderBottom: '1px solid #eee' }}
-              >
-                <td
-                  style={{
-                    padding: '20px 25px',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {formatDate(when)}
-                </td>
-
-                <td
-                  style={{
-                    padding: '20px 25px',
-                    whiteSpace: 'nowrap',
-                    color: '#555',
-                  }}
-                >
-                  {formatTime(when)}
-                </td>
-
-                <td style={{ padding: '20px 25px', fontWeight: '600' }}>
-                  {payout.organizer?.name || 'Unknown'}
-                </td>
-
+              <tr key={p._id} style={{ borderBottom: '1px solid #eee' }}>
+                <td style={{ padding: '20px 25px', whiteSpace: 'nowrap' }}>{formatDate(when)}</td>
+                <td style={{ padding: '20px 25px', whiteSpace: 'nowrap', color: '#555' }}>{formatTime(when)}</td>
+                <td style={{ padding: '20px 25px', fontWeight: '600' }}>{p.organizer?.name || 'Unknown'}</td>
+                <td style={{ padding: '20px 25px' }}>{p.event?.title || 'Unknown Event'}</td>
+                <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#00b060' }}>₦{(p.amount || 0).toLocaleString()}</td>
+                <td style={{ padding: '20px 25px', fontFamily: 'monospace', fontSize: '13px' }}>{p.paymentReference || '—'}</td>
                 <td style={{ padding: '20px 25px' }}>
-                  {payout.event?.title || 'Unknown Event'}
-                </td>
-
-                <td
-                  style={{
-                    padding: '20px 25px',
-                    fontWeight: 'bold',
-                    color: '#00b060',
-                  }}
-                >
-                  ₦{formatNumber(payout.amount)}
-                </td>
-
-                <td
-                  style={{
-                    padding: '20px 25px',
-                    fontFamily: 'monospace',
-                    fontSize: '13px',
-                  }}
-                >
-                  {payout.paymentReference || '—'}
-                </td>
-
-                <td style={{ padding: '20px 25px' }}>
-                  <span
-                    style={{
-                      background: '#e6f7ee',
-                      color: '#00b060',
-                      padding: '4px 10px',
-                      borderRadius: '20px',
-                      fontSize: '12px',
-                      textTransform: 'uppercase',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    {payout.status || 'unknown'}
+                  <span style={{ background: '#e6f7ee', color: '#00b060', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                    {p.status}
                   </span>
                 </td>
               </tr>
@@ -559,20 +213,16 @@ const AdminDashboard = () => {
     payouts: 'Payout Requests',
     history: 'Payout History',
     users: 'Manage Users',
-    events: 'Event Moderation',
+    events: 'Event Moderation'
   };
 
   return (
     <>
       <style>{`
-        .admin-layout {
-          display: flex;
-          height: 100vh;
-          width: 100vw;
-          background: #f4f7f6;
-          overflow: hidden;
-        }
+        /* BASE LAYOUT */
+        .admin-layout { display: flex; height: 100vh; width: 100vw; background: #f4f7f6; overflow: hidden; }
 
+        /* SIDEBAR */
         .admin-sidebar {
           width: 280px;
           min-width: 280px;
@@ -585,14 +235,16 @@ const AdminDashboard = () => {
           z-index: 1000;
         }
 
+        /* MAIN CONTENT AREA */
         .admin-main {
           flex: 1;
           padding: 50px;
           overflow-y: auto;
           position: relative;
-          min-width: 0;
+          min-width: 0; /* CRITICAL FIX: prevents flexbox children from breaking past the screen width */
         }
 
+        /* MOBILE MENU BUTTON & OVERLAY */
         .mobile-menu-btn {
           display: none;
           position: fixed;
@@ -617,130 +269,60 @@ const AdminDashboard = () => {
           backdrop-filter: blur(2px);
         }
 
-        .stat-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-          gap: 25px;
-        }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 25px; }
 
+        /* RESPONSIVE BREAKPOINTS (Tablet & Mobile) */
         @media (max-width: 992px) {
-          .admin-sidebar {
-            position: fixed;
-            height: 100vh;
-            top: 0;
-            left: 0;
-            transform: translateX(-100%);
-          }
-
-          .admin-sidebar.open {
-            transform: translateX(0);
-          }
-
-          .admin-main {
-            padding: 80px 20px 30px;
-          }
-
-          .mobile-menu-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .overlay.open {
-            display: block;
-          }
-
-          .stat-grid {
-            grid-template-columns: 1fr;
-          }
+          .admin-sidebar { position: fixed; height: 100vh; top: 0; left: 0; transform: translateX(-100%); }
+          .admin-sidebar.open { transform: translateX(0); }
+          .admin-main { padding: 80px 20px 30px; }
+          .mobile-menu-btn { display: flex; align-items: center; justify-content: center; }
+          .overlay.open { display: block; }
+          .stat-grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
       <div className="admin-layout">
-        {/* Mobile overlay */}
-        <div
-          className={`overlay ${isSidebarOpen ? 'open' : ''}`}
-          onClick={() => setIsSidebarOpen(false)}
-        />
 
-        {/* Mobile menu button */}
-        <button
-          className="mobile-menu-btn"
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          aria-label={isSidebarOpen ? 'Close menu' : 'Open menu'}
-        >
+        {/* Mobile Overlay */}
+        <div className={`overlay ${isSidebarOpen ? 'open' : ''}`} onClick={() => setIsSidebarOpen(false)} />
+
+        {/* Mobile Hamburger Button */}
+        <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
           {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
 
-        {/* Sidebar */}
+        {/* PROFESSIONAL SIDEBAR */}
         <div className={`admin-sidebar ${isSidebarOpen ? 'open' : ''}`}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '0 10px',
-              marginBottom: '40px',
-            }}
-          >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0 10px', marginBottom: '40px' }}>
             <ShieldAlert size={28} color="#ff5a36" />
-
-            <h2
-              style={{
-                fontSize: '22px',
-                margin: 0,
-                letterSpacing: '1px',
-              }}
-            >
-              Admin
-              <span style={{ color: '#ff5a36' }}>Portal</span>
-            </h2>
+            <h2 style={{ fontSize: '22px', margin: 0, letterSpacing: '1px' }}>Admin<span style={{ color: '#ff5a36' }}>Portal</span></h2>
           </div>
 
-          <ul
-            style={{
-              listStyle: 'none',
-              padding: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              flex: 1,
-            }}
-          >
+          <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
             {[
               { id: 'overview', icon: LayoutDashboard, label: 'Platform Overview' },
               { id: 'payouts', icon: CreditCard, label: 'Payout Requests' },
               { id: 'history', icon: History, label: 'Payout History' },
               { id: 'users', icon: Users, label: 'Manage Users' },
-              { id: 'events', icon: Calendar, label: 'Event Moderation' },
-            ].map((tab) => (
+              { id: 'events', icon: Calendar, label: 'Event Moderation' }
+            ].map(tab => (
               <li key={tab.id}>
                 <button
                   onClick={() => {
                     setActiveTab(tab.id);
-                    setIsSidebarOpen(false);
+                    setIsSidebarOpen(false); // Auto-close menu on mobile after clicking a tab
                   }}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '15px',
-                    width: '100%',
-                    padding: '15px',
-                    background:
-                      activeTab === tab.id
-                        ? 'rgba(255, 90, 54, 0.1)'
-                        : 'transparent',
+                    display: 'flex', alignItems: 'center', gap: '15px', width: '100%', padding: '15px',
+                    background: activeTab === tab.id ? 'rgba(255, 90, 54, 0.1)' : 'transparent',
                     color: activeTab === tab.id ? '#ff5a36' : '#999',
-                    border: 'none',
-                    borderRadius: '12px',
-                    cursor: 'pointer',
-                    textAlign: 'left',
+                    border: 'none', borderRadius: '12px', cursor: 'pointer', textAlign: 'left',
                     fontWeight: activeTab === tab.id ? '600' : '400',
-                    transition: 'all 0.2s ease',
+                    transition: 'all 0.2s ease'
                   }}
                 >
-                  <tab.icon size={20} />
-                  {tab.label}
+                  <tab.icon size={20} /> {tab.label}
                 </button>
               </li>
             ))}
@@ -748,311 +330,98 @@ const AdminDashboard = () => {
 
           <button
             onClick={handleLogout}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '15px',
-              width: '100%',
-              padding: '15px',
-              background: 'transparent',
-              color: '#666',
-              border: 'none',
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '15px', width: '100%', padding: '15px', background: 'transparent', color: '#666', border: 'none', cursor: 'pointer', textAlign: 'left' }}
           >
-            <LogOut size={20} />
-            Secure Logout
+            <LogOut size={20} /> Secure Logout
           </button>
         </div>
 
-        {/* Main content */}
+        {/* MAIN CONTENT AREA */}
         <div className="admin-main">
           <div style={{ marginBottom: '40px' }}>
-            <h1
-              style={{
-                fontSize: '32px',
-                color: '#111',
-                margin: 0,
-              }}
-            >
+            <h1 style={{ fontSize: '32px', color: '#111', margin: 0 }}>
               {tabTitles[activeTab] || activeTab}
             </h1>
-
-            <p style={{ color: '#777', marginTop: '8px' }}>
-              Manage and monitor your platform's activity.
-            </p>
+            <p style={{ color: '#777', marginTop: '8px' }}>Manage and monitor your platform's activity.</p>
           </div>
 
           {loading ? (
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                height: '400px',
-              }}
-            >
-              <Loader
-                className="animate-spin"
-                size={50}
-                color="#ff5a36"
-              />
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
+              <Loader className="animate-spin" size={50} color="#ff5a36" />
             </div>
           ) : (
             <>
               {activeTab === 'overview' && renderOverview()}
 
-              {activeTab === 'payouts' &&
-                renderTable(
-                  [
-                    'Organizer',
-                    'Event',
-                    'Amount',
-                    'Bank',
-                    'Account Number',
-                    'Account Name',
-                    'Action',
-                  ],
-                  pendingPayouts,
-                  (payout) => (
-                    <tr
-                      key={payout._id}
-                      style={{ borderBottom: '1px solid #eee' }}
-                    >
-                      <td style={{ padding: '20px 25px' }}>
-                        {payout.organizer?.name || 'Unknown'}
-                      </td>
-
-                      <td style={{ padding: '20px 25px' }}>
-                        {payout.event?.title || 'Unknown Event'}
-                      </td>
-
-                      <td
-                        style={{
-                          padding: '20px 25px',
-                          fontWeight: 'bold',
-                        }}
+              {activeTab === 'payouts' && renderTable(
+                ['Organizer', 'Event', 'Amount', 'Bank', 'Account Number', 'Account Name', 'Action'],
+                pendingPayouts,
+                (p) => (
+                  <tr key={p._id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '20px 25px' }}>{p.organizer?.name || 'Unknown'}</td>
+                    <td style={{ padding: '20px 25px' }}>{p.event?.title || 'Unknown Event'}</td>
+                    <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{p.amount.toLocaleString()}</td>
+                    <td style={{ padding: '20px 25px' }}>{p.bankDetails?.bankName || '—'}</td>
+                    <td style={{ padding: '20px 25px', fontFamily: 'monospace' }}>{p.bankDetails?.accountNumber || '—'}</td>
+                    <td style={{ padding: '20px 25px' }}>{p.bankDetails?.accountName || '—'}</td>
+                    <td style={{ padding: '20px 25px', display: 'flex', gap: '10px' }}>
+                      <button
+                        onClick={() => handleApprovePayout(p._id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#00b060', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
                       >
-                        ₦{formatNumber(payout.amount)}
-                      </td>
-
-                      <td style={{ padding: '20px 25px' }}>
-                        {payout.bankDetails?.bankName || '—'}
-                      </td>
-
-                      <td
-                        style={{
-                          padding: '20px 25px',
-                          fontFamily: 'monospace',
-                        }}
-                      >
-                        {payout.bankDetails?.accountNumber || '—'}
-                      </td>
-
-                      <td style={{ padding: '20px 25px' }}>
-                        {payout.bankDetails?.accountName || '—'}
-                      </td>
-
-                      <td
-                        style={{
-                          padding: '20px 25px',
-                          display: 'flex',
-                          gap: '10px',
-                        }}
-                      >
-                        <button
-                          onClick={() => handleApprovePayout(payout._id)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            background: '#00b060',
-                            color: 'white',
-                            border: 'none',
-                            padding: '8px 14px',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          <CheckCircle size={16} />
-                          Approve
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                )}
+                        <CheckCircle size={16} /> Approve
+                      </button>
+                    </td>
+                  </tr>
+                )
+              )}
 
               {activeTab === 'history' && renderPayoutHistory()}
 
-              {activeTab === 'users' &&
-                renderTable(
-                  ['Name', 'Email', 'Role', 'Status', 'Action'],
-                  usersList,
-                  (user) => (
-                    <tr
-                      key={user._id}
-                      style={{ borderBottom: '1px solid #eee' }}
-                    >
-                      <td
-                        style={{
-                          padding: '20px 25px',
-                          fontWeight: '600',
-                        }}
-                      >
-                        {user.name || '—'}
-                      </td>
+              {activeTab === 'users' && renderTable(
+                ['Name', 'Email', 'Role', 'Status', 'Action'],
+                usersList,
+                (u) => (
+                  <tr key={u._id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '20px 25px', fontWeight: '600' }}>{u.name}</td>
+                    <td style={{ padding: '20px 25px', color: '#555' }}>{u.email}</td>
+                    <td style={{ padding: '20px 25px' }}><span style={{ background: u.role === 'admin' ? '#ff5a36' : '#eee', color: u.role === 'admin' ? 'white' : '#333', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>{u.role}</span></td>
+                    <td style={{ padding: '20px 25px', color: u.isActive ? '#00b060' : '#cc0000', fontWeight: 'bold' }}>{u.isActive ? 'Active' : 'Suspended'}</td>
+                    <td style={{ padding: '20px 25px' }}>
+                      <button style={{ color: '#cc0000', background: '#ffe6e6', border: 'none', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Ban User</button>
+                    </td>
+                  </tr>
+                )
+              )}
 
-                      <td style={{ padding: '20px 25px', color: '#555' }}>
-                        {user.email || '—'}
-                      </td>
+              {activeTab === 'events' && renderTable(
+                ['Event Title', 'Organizer', 'Tickets Sold', 'Gross Amount', 'Platform Fee (7%)', 'Action'],
+                eventsList,
+                (e) => {
+                  const totalSold = e.tickets && e.tickets.length > 0
+                    ? e.tickets.reduce((sum, tier) => sum + (tier.sold || 0), 0)
+                    : (e.eventTicketsSold || 0);
 
+                  // Use variables computed in the backend, default to 0 if not yet available
+                  const grossEarned = e.grossEarned || 0;
+                  const platformFee = e.platformFee || 0;
+
+                  return (
+                    <tr key={e._id} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '20px 25px', fontWeight: '600' }}>{e.title}</td>
+                      <td style={{ padding: '20px 25px' }}>{e.organizer?.name || 'Unknown'}</td>
+                      <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>{totalSold}</td>
+                      <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{grossEarned.toLocaleString()}</td>
+                      <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#e65100' }}>₦{platformFee.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px' }}>
-                        <span
-                          style={{
-                            background:
-                              user.role === 'admin' ? '#ff5a36' : '#eee',
-                            color:
-                              user.role === 'admin' ? 'white' : '#333',
-                            padding: '4px 10px',
-                            borderRadius: '20px',
-                            fontSize: '12px',
-                            textTransform: 'uppercase',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          {user.role || 'unknown'}
-                        </span>
-                      </td>
-
-                      <td
-                        style={{
-                          padding: '20px 25px',
-                          color: user.isActive ? '#00b060' : '#cc0000',
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {user.isActive ? 'Active' : 'Suspended'}
-                      </td>
-
-                      <td style={{ padding: '20px 25px' }}>
-                        <button
-                          style={{
-                            color: '#cc0000',
-                            background: '#ffe6e6',
-                            border: 'none',
-                            padding: '8px 14px',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          Ban User
+                        <button style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'white', background: '#cc0000', border: 'none', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+                          <Trash2 size={16} /> Delete
                         </button>
                       </td>
                     </tr>
-                  )
-                )}
-
-              {activeTab === 'events' &&
-                renderTable(
-                  [
-                    'Event Title',
-                    'Organizer',
-                    'Tickets Sold',
-                    'Gross Amount',
-                    'Platform Fee (7%)',
-                    'Action',
-                  ],
-                  eventsList,
-                  (event) => {
-                    const totalSold =
-                      Array.isArray(event.tickets) &&
-                      event.tickets.length > 0
-                        ? event.tickets.reduce(
-                            (sum, tier) =>
-                              sum + (Number(tier?.sold) || 0),
-                            0
-                          )
-                        : Number(event.eventTicketsSold) || 0;
-
-                    const grossEarned =
-                      Number(event.grossEarned) || 0;
-
-                    const platformFee =
-                      Number(event.platformFee) || 0;
-
-                    return (
-                      <tr
-                        key={event._id}
-                        style={{ borderBottom: '1px solid #eee' }}
-                      >
-                        <td
-                          style={{
-                            padding: '20px 25px',
-                            fontWeight: '600',
-                          }}
-                        >
-                          {event.title || 'Untitled Event'}
-                        </td>
-
-                        <td style={{ padding: '20px 25px' }}>
-                          {event.organizer?.name || 'Unknown'}
-                        </td>
-
-                        <td
-                          style={{
-                            padding: '20px 25px',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          {formatNumber(totalSold)}
-                        </td>
-
-                        <td
-                          style={{
-                            padding: '20px 25px',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          ₦{formatNumber(grossEarned)}
-                        </td>
-
-                        <td
-                          style={{
-                            padding: '20px 25px',
-                            fontWeight: 'bold',
-                            color: '#e65100',
-                          }}
-                        >
-                          ₦{formatNumber(platformFee)}
-                        </td>
-
-                        <td style={{ padding: '20px 25px' }}>
-                          <button
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '5px',
-                              color: 'white',
-                              background: '#cc0000',
-                              border: 'none',
-                              padding: '8px 14px',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              fontWeight: 'bold',
-                            }}
-                          >
-                            <Trash2 size={16} />
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  }
-                )}
+                  );
+                }
+              )}
             </>
           )}
         </div>
