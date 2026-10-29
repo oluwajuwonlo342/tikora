@@ -9,11 +9,41 @@ import api from '../services/api';
 // Works out when a payout was approved (uses whichever date field your backend sends)
 const getApprovalDate = (p) => p.approvedAt || p.processedAt || p.paidAt || p.updatedAt || p.createdAt;
 
-const formatDate = (d) =>
-  d ? new Date(d).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+// Nigeria timezone
+const TIME_ZONE = 'Africa/Lagos';
 
-const formatTime = (d) =>
-  d ? new Date(d).toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }) : '—';
+// Safely format dates in Nigerian time
+const formatDate = (value) => {
+  if (!value) return '—';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return new Intl.DateTimeFormat('en-NG', {
+    timeZone: TIME_ZONE,
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+};
+
+// Safely format times in Nigerian time
+const formatTime = (value) => {
+  if (!value) return '—';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return new Intl.DateTimeFormat('en-NG', {
+    timeZone: TIME_ZONE,
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).format(date);
+};
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
