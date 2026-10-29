@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import {
   CalendarDays,
@@ -21,6 +20,7 @@ const EMPTY_STATS = {
   totalRevenue: 0,
 };
 
+// ✅ BULLETPROOF NUMBER FORMATTER: This prevents the 'toLocaleString' crash!
 function formatNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number.toLocaleString("en-NG") : "0";
