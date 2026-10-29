@@ -85,7 +85,27 @@ function CreateEvent() {
       )
     );
   };
+// Treat datetime-local values as Nigeria (UTC+1) wall-clock time.
+const convertNigerianTimeToISO = (value) => {
+  if (!value) return "";
 
+  const normalized = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
+    ? `${value}:00`
+    : value;
+
+  // Avoid adding the offset twice if the value already has one.
+  const date = new Date(
+    /(?:Z|[+-]\d{2}:\d{2})$/i.test(normalized)
+      ? normalized
+      : `${normalized}+01:00`
+  );
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Invalid event date or time.");
+  }
+
+  return date.toISOString();
+};
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -106,8 +126,14 @@ function CreateEvent() {
       data.append("title", formData.title);
       data.append("description", formData.description);
       data.append("category", formData.category.toLowerCase());
-      data.append("date", formData.date);
-      data.append("endDate", formData.endDate);
+ data.append("date", convertNigerianTimeToISO(formData.date));
+
+if (formData.endDate) {
+  data.append(
+    "endDate",
+    convertNigerianTimeToISO(formData.endDate)
+  );
+}
       data.append("venue", formData.venue);
       data.append("location", formData.location);
 
