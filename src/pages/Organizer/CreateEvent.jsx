@@ -1,293 +1,274 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Calendar, MapPin, Loader, Search, Filter } from 'lucide-react';
-import { getAllEvents } from '../services/eventService';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Trash2, Image as ImageIcon, Loader2 } from "lucide-react";
+import api from "../services/api";
 
-const TIME_ZONE = 'Africa/Lagos';
+// Treat datetime-local input as Nigeria wall-clock time (Africa/Lagos, UTC+1).
+// Example: 2026-10-29T09:00 becomes 2026-10-29T08:00:00.000Z.
+const convertNigerianTimeToISO = (value) => {
+  if (!value) return "";
 
-const formatEventDate = (value) => {
-  if (!value) return 'Date unavailable';
+  const normalized = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
+    ? `${value}:00`
+    : value;
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+  // Don't append another offset if the value already has one.
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(normalized);
+  const parsedDate = new Date(hasTimezone ? normalized : `${normalized}+01:00`);
 
-  return new Intl.DateTimeFormat('en-NG', {
-    timeZone: TIME_ZONE,
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date);
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new Error("Invalid event date or time.");
+  }
+
+  return parsedDate.toISOString();
 };
 
-const formatEventTime = (value) => {
-  if (!value) return '';
+function CreateEvent() {
+  const navigate = useNavigate();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    category: "music",
+    date: "",
+    endDate: "",
+    venue: "",
+    location: "",
+  });
 
-  return new Intl.DateTimeFormat('en-NG', {
-    timeZone: TIME_ZONE,
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  }).format(date);
-};
+  const [tickets, setTickets] = useState([
+    { name: "Regular", price: "", quantity: "" },
+  ]);
 
-const Events = () => {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedCategory = searchParams.get('category') || 'all';
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchEvents = async () => {
-      try {
-        setLoading(true);
-        setError('');
-
-        const data = await getAllEvents();
-        const eventsList = Array.isArray(data) ? data : (data?.events || []);
-
-        let filtered = eventsList.filter((event) => event.status !== 'draft');
-
-        if (selectedCategory && selectedCategory !== 'all') {
-          filtered = filtered.filter(
-            (event) =>
-              event.category?.toLowerCase() === selectedCategory.toLowerCase()
-          );
-        }
-
-        if (isMounted) setEvents(filtered);
-      } catch (err) {
-        console.error('Failed to fetch events:', err);
-        if (isMounted) {
-          setError('Failed to load events. Please check your connection.');
-        }
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    fetchEvents();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedCategory]);
-
-  const handleCategoryChange = (category) => {
-    const nextParams = new URLSearchParams(searchParams);
-
-    if (category === 'all') {
-      nextParams.delete('category');
-    } else {
-      nextParams.set('category', category);
-    }
-
-    setSearchParams(nextParams);
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((previous) => ({ ...previous, [name]: value }));
   };
 
-  const displayedEvents = events.filter((event) =>
-    event.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.venue?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleTicketChange = (index, field, value) => {
+    setTickets((previous) => previous.map((ticket, ticketIndex) =>
+      ticketIndex === index ? { ...ticket, [field]: value } : ticket
+    ));
+  };
 
-  const categories = [
-    'all',
-    'music',
-    'party',
-    'business',
-    'arts',
-    'sports',
-    'education',
-    'festival',
-  ];
+  const addTicket = () => setTickets((previous) => [
+    ...previous,
+    { name: "", price: "", quantity: "" },
+  ]);
+
+  const removeTicket = (index) => {
+    if (tickets.length === 1) return;
+    setTickets((previous) => previous.filter((_, ticketIndex) => ticketIndex !== index));
+  };
+
+  const handleImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid image file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image must be less than 5MB.");
+      return;
+    }
+
+    setError("");
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const validateForm = () => {
+    if (!form.title.trim()) return "Event title is required.";
+    if (!form.description.trim()) return "Event description is required.";
+    if (!form.category) return "Please select an event category.";
+    if (!form.date) return "Event date is required.";
+    if (!form.venue.trim()) return "Venue is required.";
+    if (!form.location.trim()) return "Location is required.";
+    if (!imageFile) return "Please upload an event image.";
+
+    if (form.endDate) {
+      const start = new Date(convertNigerianTimeToISO(form.date));
+      const end = new Date(convertNigerianTimeToISO(form.endDate));
+      if (end <= start) return "End date must be after the event start date.";
+    }
+
+    if (!tickets.length) return "At least one ticket type is required.";
+    for (let index = 0; index < tickets.length; index += 1) {
+      const ticket = tickets[index];
+      if (!ticket.name.trim()) return `Ticket ${index + 1} needs a name.`;
+      if (ticket.price === "" || !Number.isFinite(Number(ticket.price)) || Number(ticket.price) < 0) {
+        return `Enter a valid price for ticket ${index + 1}.`;
+      }
+      if (ticket.quantity === "" || !Number.isInteger(Number(ticket.quantity)) || Number(ticket.quantity) < 1) {
+        return `Enter a valid quantity for ticket ${index + 1}.`;
+      }
+    }
+    return "";
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    let validationError;
+    try {
+      validationError = validateForm();
+    } catch (conversionError) {
+      setError(conversionError.message || "Please check the event date and time.");
+      return;
+    }
+    if (validationError) {
+      setError(validationError);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const data = new FormData();
+      data.append("title", form.title.trim());
+      data.append("description", form.description.trim());
+      data.append("category", form.category);
+      data.append("date", convertNigerianTimeToISO(form.date));
+      if (form.endDate) data.append("endDate", convertNigerianTimeToISO(form.endDate));
+      data.append("venue", form.venue.trim());
+      data.append("location", form.location.trim());
+      data.append("tickets", JSON.stringify(tickets.map((ticket) => ({
+        name: ticket.name.trim(),
+        price: Number(ticket.price),
+        quantity: Number(ticket.quantity),
+      }))));
+      data.append("image", imageFile);
+
+      const response = await api.post("/events", data);
+      if (!response.data?.success) {
+        setError(response.data?.message || "Unable to create event.");
+        return;
+      }
+
+      setSuccess("Event created successfully.");
+      const eventId = response.data.event?._id;
+      setTimeout(() => navigate(eventId ? `/events/${eventId}` : "/my-events"), 900);
+    } catch (requestError) {
+      console.error("Create event error:", requestError);
+      if (requestError.response?.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        navigate("/login");
+        return;
+      }
+      setError(requestError.response?.data?.message || requestError.message || "Unable to create event. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="discover-page">
-      {/* Premium Dark Header */}
-      <div className="discover-banner">
-        <h1>Explore Amazing Events</h1>
-        <p>
-          Discover and book tickets for concerts, parties, workshops, and
-          unmissable experiences around you.
-        </p>
-
-        <div className="discover-search-wrapper">
-          <Search size={22} />
-          <input
-            type="text"
-            placeholder="Search by event title, venue, or location..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </div>
-
+    <main className="create-event-page">
       <div className="container">
-        {/* Category Filter Pills */}
-        <div className="category-filters">
-          <Filter size={18} className="filter-icon" />
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => handleCategoryChange(cat)}
-              className={`filter-pill ${
-                selectedCategory === cat ||
-                (cat === 'all' && !searchParams.get('category'))
-                  ? 'active'
-                  : ''
-              }`}
-              style={{ textTransform: 'capitalize' }}
-            >
-              {cat}
+        <header className="create-event-header">
+          <span className="page-label">ORGANIZER</span>
+          <h1>Create Event</h1>
+          <p>Enter your event details, upload an image, and set up ticket types.</p>
+        </header>
+
+        {error && <div className="form-error" role="alert"><p>{error}</p></div>}
+        {success && <div className="form-success" role="status"><p>{success}</p></div>}
+
+        <form onSubmit={handleSubmit} className="create-event-form">
+          <section className="form-section">
+            <div className="form-section-header">
+              <h2>Event Information</h2>
+              <p>Fields marked * are required.</p>
+            </div>
+            <div className="form-grid">
+              <div className="form-group full-width">
+                <label htmlFor="title">Event title *</label>
+                <input id="title" name="title" value={form.title} onChange={handleChange} placeholder="Enter event title" required />
+              </div>
+              <div className="form-group full-width">
+                <label htmlFor="description">Description *</label>
+                <textarea id="description" name="description" value={form.description} onChange={handleChange} rows="6" placeholder="Describe your event" required />
+              </div>
+              <div className="form-group">
+                <label htmlFor="category">Category *</label>
+                <select id="category" name="category" value={form.category} onChange={handleChange} required>
+                  <option value="music">Music</option>
+                  <option value="party">Party</option>
+                  <option value="business">Business</option>
+                  <option value="arts">Arts</option>
+                  <option value="sports">Sports</option>
+                  <option value="education">Education</option>
+                  <option value="festival">Festival</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label htmlFor="date">Start date &amp; time (Nigeria time) *</label>
+                <input id="date" name="date" type="datetime-local" value={form.date} onChange={handleChange} required />
+              </div>
+              <div className="form-group">
+                <label htmlFor="endDate">End date &amp; time (optional)</label>
+                <input id="endDate" name="endDate" type="datetime-local" value={form.endDate} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="venue">Venue *</label>
+                <input id="venue" name="venue" value={form.venue} onChange={handleChange} placeholder="e.g. Shugarland" required />
+              </div>
+              <div className="form-group">
+                <label htmlFor="location">Location *</label>
+                <input id="location" name="location" value={form.location} onChange={handleChange} placeholder="e.g. Apata, Ibadan" required />
+              </div>
+            </div>
+          </section>
+
+          <section className="form-section">
+            <div className="form-section-header"><h2>Event Image</h2><p>JPG, PNG, or WEBP — maximum 5MB.</p></div>
+            <div className="event-image-upload">
+              {imagePreview ? <div className="image-preview"><img src={imagePreview} alt="Event preview" /></div> : <div className="image-placeholder"><ImageIcon size={40} /><p>No image selected</p></div>}
+              <label htmlFor="event-image" className="image-upload-button"><ImageIcon size={18} /> {imageFile ? "Change Image" : "Choose Image *"}</label>
+              <input id="event-image" type="file" accept="image/*" onChange={handleImageChange} hidden />
+            </div>
+          </section>
+
+          <section className="form-section">
+            <div className="form-section-header ticket-header">
+              <div><h2>Ticket Types</h2><p>Set the name, price, and available quantity for each ticket.</p></div>
+              <button type="button" className="btn btn-secondary" onClick={addTicket}><Plus size={17} /> Add Ticket</button>
+            </div>
+            <div className="ticket-edit-list">
+              {tickets.map((ticket, index) => (
+                <div className="ticket-edit-item" key={`ticket-${index}`}>
+                  <div className="ticket-edit-title"><span>Ticket {index + 1}</span></div>
+                  <div className="ticket-form-grid">
+                    <div className="form-group"><label htmlFor={`ticket-name-${index}`}>Ticket name *</label><input id={`ticket-name-${index}`} value={ticket.name} onChange={(e) => handleTicketChange(index, "name", e.target.value)} placeholder="Regular" required /></div>
+                    <div className="form-group"><label htmlFor={`ticket-price-${index}`}>Price (₦) *</label><input id={`ticket-price-${index}`} type="number" min="0" step="0.01" value={ticket.price} onChange={(e) => handleTicketChange(index, "price", e.target.value)} placeholder="2500" required /></div>
+                    <div className="form-group"><label htmlFor={`ticket-quantity-${index}`}>Quantity *</label><input id={`ticket-quantity-${index}`} type="number" min="1" step="1" value={ticket.quantity} onChange={(e) => handleTicketChange(index, "quantity", e.target.value)} placeholder="150" required /></div>
+                    <button type="button" className="remove-ticket-btn" onClick={() => removeTicket(index)} disabled={tickets.length === 1} title="Remove ticket"><Trash2 size={18} /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <div className="edit-event-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? <><Loader2 size={18} className="loading-spinner" /> Creating...</> : "Create Event"}
             </button>
-          ))}
-        </div>
-
-        {/* Dynamic State Rendering */}
-        {loading ? (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '100px 0',
-              color: 'var(--primary)',
-            }}
-          >
-            <Loader
-              className="animate-spin"
-              size={45}
-              style={{ margin: '0 auto 15px' }}
-            />
-            <p style={{ color: '#777', fontWeight: '600' }}>
-              Finding events...
-            </p>
           </div>
-        ) : error ? (
-          <div className="discover-empty">
-            <p style={{ color: '#d33', fontWeight: 'bold' }}>{error}</p>
-          </div>
-        ) : displayedEvents.length === 0 ? (
-          <div className="discover-empty">
-            <Calendar size={50} color="#ddd" style={{ margin: '0 auto' }} />
-            <h3>No events found</h3>
-            <p>Try adjusting your search query or category filter.</p>
-          </div>
-        ) : (
-          <div className="events-grid">
-            {displayedEvents.map((event) => {
-              const startingPrice =
-                event.tickets?.length > 0
-                  ? Math.min(...event.tickets.map((ticket) => Number(ticket.price) || 0))
-                  : 0;
-
-              const formattedDate = formatEventDate(event.date);
-              const formattedTime = formatEventTime(event.date);
-
-              return (
-                <Link
-                  key={event._id}
-                  to={`/events/${event._id}`}
-                  className="event-card"
-                >
-                  <div className="event-image">
-                    {event.image ? (
-                      <img src={event.image} alt={event.title} />
-                    ) : (
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          background: '#eee',
-                          display: 'grid',
-                          placeItems: 'center',
-                          color: '#999',
-                        }}
-                      >
-                        No Image
-                      </div>
-                    )}
-                    <span
-                      className="event-category"
-                      style={{ textTransform: 'capitalize' }}
-                    >
-                      {event.category || 'Event'}
-                    </span>
-                  </div>
-
-                  <div className="event-content">
-                    <h3>{event.title}</h3>
-
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                        marginBottom: '15px',
-                      }}
-                    >
-                      <div className="event-meta">
-                        <Calendar size={16} style={{ color: 'var(--primary)' }} />
-                        <span>
-                          {formattedDate}
-                          {formattedTime ? ` · ${formattedTime}` : ''}
-                        </span>
-                      </div>
-                      <div className="event-meta">
-                        <MapPin size={16} style={{ color: 'var(--primary)' }} />
-                        <span
-                          style={{
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {[event.venue, event.location].filter(Boolean).join(', ')}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="event-bottom">
-                      <div>
-                        <span
-                          style={{
-                            fontSize: '10px',
-                            color: '#999',
-                            fontWeight: '800',
-                            textTransform: 'uppercase',
-                            letterSpacing: '1px',
-                            display: 'block',
-                          }}
-                        >
-                          Ticket Price
-                        </span>
-                        <strong style={{ fontSize: '18px', color: '#111' }}>
-                          ₦{startingPrice.toLocaleString('en-NG')}
-                        </strong>
-                      </div>
-                      <span
-                        className="btn btn-primary"
-                        style={{ padding: '8px 16px', fontSize: '12px' }}
-                      >
-                        Get Tickets
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
+        </form>
       </div>
-    </div>
+    </main>
   );
-};
+}
 
-export default Events;
+export default CreateEvent;
