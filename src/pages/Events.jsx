@@ -3,70 +3,126 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Calendar, MapPin, Loader, Search, Filter } from 'lucide-react';
 import { getAllEvents } from '../services/eventService';
 
+const TIME_ZONE = 'Africa/Lagos';
+
+const formatEventDate = (value) => {
+  if (!value) return 'Date unavailable';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+
+  return new Intl.DateTimeFormat('en-NG', {
+    timeZone: TIME_ZONE,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+};
+
+const formatEventTime = (value) => {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return new Intl.DateTimeFormat('en-NG', {
+    timeZone: TIME_ZONE,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date);
+};
+
 const Events = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedCategory = searchParams.get('category') || 'all';
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchEvents = async () => {
       try {
         setLoading(true);
-        const data = await getAllEvents();
-        const eventsList = data.events || data;
+        setError('');
 
-        let filtered = eventsList.filter(event => event.status !== 'draft');
+        const data = await getAllEvents();
+        const eventsList = Array.isArray(data) ? data : (data?.events || []);
+
+        let filtered = eventsList.filter((event) => event.status !== 'draft');
 
         if (selectedCategory && selectedCategory !== 'all') {
           filtered = filtered.filter(
-            event => event.category?.toLowerCase() === selectedCategory.toLowerCase()
+            (event) =>
+              event.category?.toLowerCase() === selectedCategory.toLowerCase()
           );
         }
 
-        setEvents(filtered);
+        if (isMounted) setEvents(filtered);
       } catch (err) {
-        setError('Failed to load events. Please check your connection.');
-        console.error(err);
+        console.error('Failed to fetch events:', err);
+        if (isMounted) {
+          setError('Failed to load events. Please check your connection.');
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchEvents();
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedCategory]);
 
   const handleCategoryChange = (category) => {
+    const nextParams = new URLSearchParams(searchParams);
+
     if (category === 'all') {
-      searchParams.delete('category');
+      nextParams.delete('category');
     } else {
-      searchParams.set('category', category);
+      nextParams.set('category', category);
     }
-    setSearchParams(searchParams);
+
+    setSearchParams(nextParams);
   };
 
-  const displayedEvents = events.filter(event => 
+  const displayedEvents = events.filter((event) =>
     event.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     event.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     event.venue?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const categories = ['all', 'music', 'party', 'business', 'arts', 'sports', 'education', 'festival'];
+  const categories = [
+    'all',
+    'music',
+    'party',
+    'business',
+    'arts',
+    'sports',
+    'education',
+    'festival',
+  ];
 
   return (
     <div className="discover-page">
-      
       {/* Premium Dark Header */}
       <div className="discover-banner">
         <h1>Explore Amazing Events</h1>
-        <p>Discover and book tickets for concerts, parties, workshops, and unmissable experiences around you.</p>
+        <p>
+          Discover and book tickets for concerts, parties, workshops, and
+          unmissable experiences around you.
+        </p>
 
         <div className="discover-search-wrapper">
           <Search size={22} />
-          <input 
+          <input
             type="text"
             placeholder="Search by event title, venue, or location..."
             value={searchTerm}
@@ -76,7 +132,6 @@ const Events = () => {
       </div>
 
       <div className="container">
-        
         {/* Category Filter Pills */}
         <div className="category-filters">
           <Filter size={18} className="filter-icon" />
@@ -84,7 +139,12 @@ const Events = () => {
             <button
               key={cat}
               onClick={() => handleCategoryChange(cat)}
-              className={`filter-pill ${selectedCategory === cat || (cat === 'all' && !searchParams.get('category')) ? 'active' : ''}`}
+              className={`filter-pill ${
+                selectedCategory === cat ||
+                (cat === 'all' && !searchParams.get('category'))
+                  ? 'active'
+                  : ''
+              }`}
               style={{ textTransform: 'capitalize' }}
             >
               {cat}
@@ -94,9 +154,21 @@ const Events = () => {
 
         {/* Dynamic State Rendering */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '100px 0', color: 'var(--primary)' }}>
-            <Loader className="animate-spin" size={45} style={{ margin: '0 auto 15px' }} />
-            <p style={{ color: '#777', fontWeight: '600' }}>Finding events...</p>
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '100px 0',
+              color: 'var(--primary)',
+            }}
+          >
+            <Loader
+              className="animate-spin"
+              size={45}
+              style={{ margin: '0 auto 15px' }}
+            />
+            <p style={{ color: '#777', fontWeight: '600' }}>
+              Finding events...
+            </p>
           </div>
         ) : error ? (
           <div className="discover-empty">
@@ -109,57 +181,101 @@ const Events = () => {
             <p>Try adjusting your search query or category filter.</p>
           </div>
         ) : (
-          
-          /* The Standard Event Grid */
           <div className="events-grid">
             {displayedEvents.map((event) => {
-              const startingPrice = event.tickets?.length > 0 
-                ? Math.min(...event.tickets.map(t => t.price))
-                : 0;
+              const startingPrice =
+                event.tickets?.length > 0
+                  ? Math.min(...event.tickets.map((ticket) => Number(ticket.price) || 0))
+                  : 0;
 
-              const formattedDate = new Date(event.date).toLocaleDateString('en-US', {
-                weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
-              });
+              const formattedDate = formatEventDate(event.date);
+              const formattedTime = formatEventTime(event.date);
 
               return (
-                <Link key={event._id} to={`/events/${event._id}`} className="event-card">
+                <Link
+                  key={event._id}
+                  to={`/events/${event._id}`}
+                  className="event-card"
+                >
                   <div className="event-image">
                     {event.image ? (
                       <img src={event.image} alt={event.title} />
                     ) : (
-                      <div style={{width: '100%', height: '100%', background: '#eee', display: 'grid', placeItems: 'center', color: '#999'}}>No Image</div>
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          background: '#eee',
+                          display: 'grid',
+                          placeItems: 'center',
+                          color: '#999',
+                        }}
+                      >
+                        No Image
+                      </div>
                     )}
-                    <span className="event-category" style={{ textTransform: 'capitalize' }}>
+                    <span
+                      className="event-category"
+                      style={{ textTransform: 'capitalize' }}
+                    >
                       {event.category || 'Event'}
                     </span>
                   </div>
 
                   <div className="event-content">
                     <h3>{event.title}</h3>
-                    
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        marginBottom: '15px',
+                      }}
+                    >
                       <div className="event-meta">
                         <Calendar size={16} style={{ color: 'var(--primary)' }} />
-                        <span>{formattedDate}</span>
+                        <span>
+                          {formattedDate}
+                          {formattedTime ? ` · ${formattedTime}` : ''}
+                        </span>
                       </div>
                       <div className="event-meta">
                         <MapPin size={16} style={{ color: 'var(--primary)' }} />
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {event.venue}, {event.location}
+                        <span
+                          style={{
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {[event.venue, event.location].filter(Boolean).join(', ')}
                         </span>
                       </div>
                     </div>
 
                     <div className="event-bottom">
                       <div>
-                        <span style={{ fontSize: '10px', color: '#999', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', display: 'block' }}>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            color: '#999',
+                            fontWeight: '800',
+                            textTransform: 'uppercase',
+                            letterSpacing: '1px',
+                            display: 'block',
+                          }}
+                        >
                           Ticket Price
                         </span>
                         <strong style={{ fontSize: '18px', color: '#111' }}>
-                          ₦{startingPrice.toLocaleString()}
+                          ₦{startingPrice.toLocaleString('en-NG')}
                         </strong>
                       </div>
-                      <span className="btn btn-primary" style={{ padding: '8px 16px', fontSize: '12px' }}>
+                      <span
+                        className="btn btn-primary"
+                        style={{ padding: '8px 16px', fontSize: '12px' }}
+                      >
                         Get Tickets
                       </span>
                     </div>
