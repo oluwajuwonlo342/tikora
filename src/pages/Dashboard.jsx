@@ -31,15 +31,7 @@ function Dashboard() {
       return;
     }
 
-    let parsedUser;
-    try {
-      parsedUser = JSON.parse(storedUser);
-    } catch (error) {
-      console.error("Invalid stored user:", error);
-      localStorage.removeItem("user");
-      navigate("/login");
-      return;
-    }
+    const parsedUser = JSON.parse(storedUser);
     setUser(parsedUser);
 
     if (
@@ -60,13 +52,8 @@ function Dashboard() {
       const response = await api.get("/events/organizer/stats");
 
       if (response.data.success) {
-        const apiStats = response.data.stats || {};
-        setStats({
-          totalEvents: Number(apiStats.totalEvents ?? 0),
-          totalTicketsSold: Number(apiStats.totalTicketsSold ?? 0),
-          totalRevenue: Number(apiStats.totalRevenue ?? 0),
-        });
-        setEvents(Array.isArray(response.data.events) ? response.data.events : []);
+        setStats(response.data.stats || { totalEvents: 0, totalTicketsSold: 0, totalRevenue: 0 });
+        setEvents(response.data.events || []);
       }
     } catch (error) {
       console.error("Unable to load dashboard analytics:", error);
@@ -91,9 +78,8 @@ function Dashboard() {
     const copyEventLink = (e, eventId) => {
     e.preventDefault(); // Prevents the card's main <Link> wrapper from redirecting
     const url = `${window.location.origin}/events/${eventId}`;
-    navigator.clipboard.writeText(url)
-      .then(() => alert("Ticket link copied! You can now paste and share this with attendees."))
-      .catch(() => alert("Unable to copy the link. Please copy it from your browser address bar."));
+    navigator.clipboard.writeText(url);
+    alert("Ticket link copied! You can now paste and share this with attendees.");
   };
 
   return (
@@ -130,7 +116,7 @@ function Dashboard() {
 
         <div className="sidebar-user">
           <div className="user-avatar">
-            {(user.name || "U").charAt(0).toUpperCase()}
+            {user.name.charAt(0).toUpperCase()}
           </div>
           <div>
             <strong>{user.name}</strong>
@@ -218,7 +204,7 @@ function Dashboard() {
               {isOrganizer ? "ORGANIZER DASHBOARD" : "MY DASHBOARD"}
             </span>
             <h1>
-              Welcome back, {(user.name || "User").split(" ")[0]} 
+              Welcome back, {user.name.split(" ")[0]} 
             </h1>
             <p>
               {isOrganizer
@@ -255,7 +241,7 @@ function Dashboard() {
             </div>
             <div>
               <span>Total Events</span>
-              <strong>{Number(stats?.totalEvents ?? 0).toLocaleString("en-NG")}</strong>
+              <strong>{stats.totalEvents}</strong>
             </div>
           </div>
 
@@ -265,7 +251,7 @@ function Dashboard() {
             </div>
             <div>
               <span>Tickets Sold</span>
-              <strong>{Number(stats?.totalTicketsSold ?? 0).toLocaleString("en-NG")}</strong>
+              <strong>{stats.totalTicketsSold.toLocaleString()}</strong>
             </div>
           </div>
 
@@ -275,7 +261,7 @@ function Dashboard() {
             </div>
             <div>
               <span>Gross Revenue</span>
-              <strong>₦{Number(stats?.totalRevenue ?? 0).toLocaleString("en-NG")}</strong>
+              <strong>₦{stats.totalRevenue.toLocaleString()}</strong>
             </div>
           </div>
         </section>
@@ -332,7 +318,8 @@ function Dashboard() {
       <div className="dashboard-event-image">
         <img
           src={
-            (typeof event.image === "object" ? event.image?.url : event.image) ||
+            event.image?.url ||
+            event.image ||
             "/placeholder-event.jpg"
           }
           alt={event.title}
@@ -353,11 +340,11 @@ function Dashboard() {
         <div style={{ background: "#f8f8f6", border: "1px solid #eee", borderRadius: "8px", padding: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto" }}>
           <div>
             <span style={{ fontSize: "10px", color: "#888", textTransform: "uppercase", fontWeight: "bold", display: "block" }}>Sold</span>
-            <strong style={{ fontSize: "13px", color: "#111" }}>{Number(event.eventTicketsSold ?? 0).toLocaleString("en-NG")} / {Number(event.eventCapacity ?? 0).toLocaleString("en-NG")}</strong>
+            <strong style={{ fontSize: "13px", color: "#111" }}>{event.eventTicketsSold} / {event.eventCapacity}</strong>
           </div>
           <div style={{ textAlign: "right" }}>
             <span style={{ fontSize: "10px", color: "#888", textTransform: "uppercase", fontWeight: "bold", display: "block" }}>Earned</span>
-            <strong style={{ fontSize: "13px", color: "var(--primary)" }}>₦{Number(event.eventRevenue ?? 0).toLocaleString("en-NG")}</strong>
+            <strong style={{ fontSize: "13px", color: "var(--primary)" }}>₦{event.eventRevenue ? event.eventRevenue.toLocaleString() : "0"}</strong>
           </div>
         </div>
 
