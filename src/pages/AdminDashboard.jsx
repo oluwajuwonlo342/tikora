@@ -395,7 +395,7 @@ const AdminDashboard = () => {
               )}
 
               {activeTab === 'events' && renderTable(
-                ['Event Title', 'Organizer', 'Tickets Sold', 'Gross Amount', 'Platform Fee (7%)', 'Action'],
+                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Gross Amount', 'Platform Fee (7%)', 'Action'],
                 eventsList,
                 (e) => {
                   const totalSold = e.tickets && e.tickets.length > 0
@@ -411,6 +411,28 @@ const AdminDashboard = () => {
                       <td style={{ padding: '20px 25px', fontWeight: '600' }}>{e.title}</td>
                       <td style={{ padding: '20px 25px' }}>{e.organizer?.name || 'Unknown'}</td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>{totalSold}</td>
+                      <td style={{ padding: '20px 25px', minWidth: '220px' }}>
+                        {e.tickets && e.tickets.length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {e.tickets.map((tier) => (
+                              <div
+                                key={tier._id || tier.name}
+                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', background: '#f8f9fa', border: '1px solid #eee', borderRadius: '8px', padding: '6px 12px' }}
+                              >
+                                <span style={{ fontWeight: '600', color: '#111' }}>{tier.name}</span>
+                                <span style={{ whiteSpace: 'nowrap' }}>
+                                  <strong style={{ color: '#ff5a36' }}>{tier.sold || 0}</strong>
+                                  {tier.quantity !== undefined && (
+                                    <span style={{ color: '#999', fontSize: '12px' }}> / {tier.quantity}</span>
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span style={{ color: '#999' }}>No ticket types</span>
+                        )}
+                      </td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{grossEarned.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#e65100' }}>₦{platformFee.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px' }}>
