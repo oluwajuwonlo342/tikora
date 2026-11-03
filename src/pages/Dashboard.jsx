@@ -10,6 +10,7 @@ import {
   X,
   Scan,
   Link as LinkIcon,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
@@ -272,6 +273,14 @@ function Dashboard() {
               >
                 <Wallet size={18} />
                 Revenue
+              </Link>
+
+              <Link
+                to="/settings"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <SettingsIcon size={18} />
+                Settings
               </Link>
             </>
           )}
