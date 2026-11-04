@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, CreditCard, Calendar, Users,
-  CheckCircle, Loader, LogOut, ShieldAlert, Trash2, Menu, X, History
+  CheckCircle, Loader, LogOut, ShieldAlert, Trash2, Menu, X, History, Mail
 } from 'lucide-react';
 import api from '../services/api';
+import AdminEmailPanel from './AdminEmailPanel';
 
 // Works out when a payout was approved (uses whichever date field your backend sends)
 const getApprovalDate = (p) => p.approvedAt || p.processedAt || p.paidAt || p.updatedAt || p.createdAt;
@@ -213,7 +214,8 @@ const AdminDashboard = () => {
     payouts: 'Payout Requests',
     history: 'Payout History',
     users: 'Manage Users',
-    events: 'Event Moderation'
+    events: 'Event Moderation',
+    emails: 'Send Emails'
   };
 
   return (
@@ -305,7 +307,8 @@ const AdminDashboard = () => {
               { id: 'payouts', icon: CreditCard, label: 'Payout Requests' },
               { id: 'history', icon: History, label: 'Payout History' },
               { id: 'users', icon: Users, label: 'Manage Users' },
-              { id: 'events', icon: Calendar, label: 'Event Moderation' }
+              { id: 'events', icon: Calendar, label: 'Event Moderation' },
+              { id: 'emails', icon: Mail, label: 'Send Emails' }
             ].map(tab => (
               <li key={tab.id}>
                 <button
@@ -377,6 +380,8 @@ const AdminDashboard = () => {
               )}
 
               {activeTab === 'history' && renderPayoutHistory()}
+
+              {activeTab === 'emails' && <AdminEmailPanel />}
 
               {activeTab === 'users' && renderTable(
                 ['Name', 'Email', 'Role', 'Status', 'Action'],
