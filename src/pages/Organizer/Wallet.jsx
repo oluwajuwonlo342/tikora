@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import PayoutRequestForm from '../../components/PayoutRequestForm';
 
+const naira = (value) => `₦${(Number(value) || 0).toLocaleString()}`;
+
 const Wallet = () => {
   const [loading, setLoading] = useState(true);
   const [revenueData, setRevenueData] = useState({
@@ -11,10 +13,11 @@ const Wallet = () => {
     netPayout: 0,
     ticketsSold: 0,
     eventsList: [],
-    transactions: []
+    transactions: [],
+    fromServerBalances: false
   });
   const [error, setError] = useState('');
-  
+
   const [selectedEventForPayout, setSelectedEventForPayout] = useState(null);
 
   // Pagination State for Transactions
@@ -24,26 +27,62 @@ const Wallet = () => {
   const fetchRevenueData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/events/organizer/stats');
-      
-      if (response.data.success) {
-        const stats = response.data.stats;
-        const events = response.data.events || [];
-        const transactions = response.data.transactions || [];
-        
-        const gross = stats.totalGrossEarned || stats.totalRevenue || 0;
-        const fees = gross * 0.07; 
-        const net = stats.totalRevenue || (gross - fees);
 
-        setRevenueData({
-          totalRevenue: gross,
-          platformFees: fees,
-          netPayout: net,
-          ticketsSold: stats.totalTicketsSold || 0,
-          eventsCount: stats.totalEvents || 0,
-          eventsList: events,
-          transactions: transactions
-        });
+      // The stats route gives events, ticket counts and transactions.
+      // The balances route is the single source of truth for MONEY: it is the
+      // same calculation the server uses to accept or refuse a payout request,
+      // so every number on this page matches what a withdrawal is checked against.
+      const [statsResponse, balancesResponse] = await Promise.all([
+        api.get('/events/organizer/stats'),
+        api.get('/payouts/my-balances').catch((err) => {
+          console.error('Could not load balances:', err.response?.data || err.message);
+          return null;
+        })
+      ]);
+
+      if (statsResponse.data.success) {
+        const stats = statsResponse.data.stats;
+        const events = statsResponse.data.events || [];
+        const transactions = statsResponse.data.transactions || [];
+
+        const balances = balancesResponse?.data?.success ? balancesResponse.data.balances : null;
+
+        if (balances) {
+          // Attach each event's balance and use it for the money columns
+          const eventsWithBalances = events.map((evt) => {
+            const balance = balances[evt._id];
+            return balance ? { ...evt, eventRevenue: balance.available, balance } : evt;
+          });
+
+          const allBalances = Object.values(balances);
+          const totalEarned = allBalances.reduce((sum, b) => sum + b.totalEarned, 0);
+          const totalAvailable = allBalances.reduce((sum, b) => sum + b.available, 0);
+
+          setRevenueData({
+            totalRevenue: totalEarned,
+            platformFees: totalEarned * 0.07,
+            netPayout: totalAvailable,
+            ticketsSold: stats.totalTicketsSold || 0,
+            eventsList: eventsWithBalances,
+            transactions,
+            fromServerBalances: true
+          });
+        } else {
+          // Fallback if the balances request failed: use the stats numbers
+          const gross = stats.totalGrossEarned || stats.totalRevenue || 0;
+          const fees = gross * 0.07;
+          const net = stats.totalRevenue ?? (gross - fees);
+
+          setRevenueData({
+            totalRevenue: gross,
+            platformFees: fees,
+            netPayout: net,
+            ticketsSold: stats.totalTicketsSold || 0,
+            eventsList: events,
+            transactions,
+            fromServerBalances: false
+          });
+        }
       }
     } catch (err) {
       setError('Failed to load wallet data.');
@@ -81,7 +120,7 @@ const Wallet = () => {
 
   return (
     <div className="container wallet-page" style={{ padding: '30px 15px', maxWidth: '1200px', margin: '0 auto' }}>
-      
+
       {/* Responsive Styles Injection */}
       <style>{`
         .wallet-hero {
@@ -138,8 +177,8 @@ const Wallet = () => {
       <div className="wallet-hero">
         <div className="wallet-hero-left">
           <span style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', color: '#ff5a36', fontWeight: '600' }}>Organizer Wallet & Earnings</span>
-          <h1>₦{revenueData.netPayout.toLocaleString()}</h1>
-          <p style={{ color: '#aaa', fontSize: '14px' }}>Available Net Payout (Organizer Earnings After Withdrawals)</p>
+          <h1>{naira(revenueData.netPayout)}</h1>
+          <p style={{ color: '#aaa', fontSize: '14px' }}>Available to withdraw (earnings minus payouts paid and pending)</p>
         </div>
       </div>
 
@@ -149,36 +188,36 @@ const Wallet = () => {
       <div className="wallet-grid">
         <div className="wallet-card">
           <span style={{ color: '#666', fontSize: '14px' }}>Organizer Total Earnings</span>
-          <h3 style={{ color: '#111', fontSize: '24px', marginTop: '10px' }}>₦{revenueData.totalRevenue.toLocaleString()}</h3>
+          <h3 style={{ color: '#111', fontSize: '24px', marginTop: '10px' }}>{naira(revenueData.totalRevenue)}</h3>
         </div>
 
         <div className="wallet-card">
           <span style={{ color: '#666', fontSize: '14px' }}>Platform Fees Paid by Buyers</span>
-          <h3 style={{ color: '#e65100', fontSize: '24px', marginTop: '10px' }}>₦{revenueData.platformFees.toLocaleString()}</h3>
+          <h3 style={{ color: '#e65100', fontSize: '24px', marginTop: '10px' }}>{naira(revenueData.platformFees)}</h3>
         </div>
 
         <div className="wallet-card">
           <span style={{ color: '#666', fontSize: '14px' }}>Total Tickets Sold</span>
-          <h3 style={{ color: 'var(--primary)', fontSize: '24px', marginTop: '10px' }}>{revenueData.ticketsSold.toLocaleString()}</h3>
+          <h3 style={{ color: 'var(--primary)', fontSize: '24px', marginTop: '10px' }}>{(revenueData.ticketsSold || 0).toLocaleString()}</h3>
         </div>
       </div>
 
       {/* Dynamic Payout Form Injection */}
       {selectedEventForPayout && (
         <div style={{ marginBottom: '40px', padding: '20px', border: '2px dashed var(--primary)', borderRadius: '16px', position: 'relative', background: '#fff' }}>
-          <button 
+          <button
             onClick={() => setSelectedEventForPayout(null)}
             style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#666' }}
           >
             <X size={24} />
           </button>
-          
+
           <h3 style={{ marginBottom: '5px', fontSize: '18px' }}>Withdraw Funds for: {selectedEventForPayout.title}</h3>
           <p style={{ color: '#666', marginBottom: '20px', fontSize: '14px' }}>Please provide your bank details below to receive your earnings.</p>
-          
-          <PayoutRequestForm 
-            eventId={selectedEventForPayout._id} 
-            availableBalance={selectedEventForPayout.eventRevenue} 
+
+          <PayoutRequestForm
+            eventId={selectedEventForPayout._id}
+            availableBalance={selectedEventForPayout.eventRevenue}
             onSuccess={() => {
               setSelectedEventForPayout(null);
               fetchRevenueData();
@@ -190,40 +229,58 @@ const Wallet = () => {
       {/* Event Revenue Breakdown Table */}
       <div className="transactions-section" style={{ marginBottom: '40px' }}>
         <h2 style={{ marginBottom: '20px', fontSize: '22px', fontFamily: 'Space Grotesk, sans-serif' }}>Event Revenue Breakdown</h2>
-        
+
         {revenueData.eventsList?.length === 0 ? (
           <p style={{ color: '#777', fontSize: '14px' }}>No revenue records found yet.</p>
         ) : (
           <div className="table-responsive-wrapper">
-            <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: '600px' }}>
+            <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: '760px' }}>
               <thead style={{ background: '#f8f9fa', borderBottom: '1px solid #eee' }}>
                 <tr>
                   <th style={{ padding: '15px', fontSize: '13px', color: '#555' }}>Event Title</th>
                   <th style={{ padding: '15px', fontSize: '13px', color: '#555' }}>Tickets Sold</th>
-                  <th style={{ padding: '15px', fontSize: '13px', color: '#555' }}>Available Earnings</th>
+                  {revenueData.fromServerBalances && (
+                    <>
+                      <th style={{ padding: '15px', fontSize: '13px', color: '#555' }}>Earned</th>
+                      <th style={{ padding: '15px', fontSize: '13px', color: '#555' }}>Paid / Pending</th>
+                    </>
+                  )}
+                  <th style={{ padding: '15px', fontSize: '13px', color: '#555' }}>Available to Withdraw</th>
                   <th style={{ padding: '15px', fontSize: '13px', color: '#555' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {revenueData.eventsList?.map((evt) => {
-                  const netEventRevenue = evt.eventRevenue;
-                  
+                  const availableForEvent = Number(evt.eventRevenue) || 0;
+                  const balance = evt.balance;
+
                   return (
                     <tr key={evt._id} style={{ borderBottom: '1px solid #eee' }}>
                       <td style={{ padding: '15px', fontSize: '14px' }}><strong>{evt.title}</strong></td>
                       <td style={{ padding: '15px', fontSize: '14px' }}>{evt.eventTicketsSold} / {evt.eventCapacity}</td>
-                      <td style={{ padding: '15px', fontSize: '14px' }}><strong>₦{netEventRevenue.toLocaleString()}</strong></td>
+                      {revenueData.fromServerBalances && (
+                        <>
+                          <td style={{ padding: '15px', fontSize: '14px' }}>{naira(balance?.totalEarned)}</td>
+                          <td style={{ padding: '15px', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                            <span style={{ color: '#00b060' }}>{naira(balance?.paid)} paid</span>
+                            {balance?.pending > 0 && (
+                              <div style={{ color: '#b36b00', marginTop: '3px' }}>{naira(balance.pending)} pending</div>
+                            )}
+                          </td>
+                        </>
+                      )}
+                      <td style={{ padding: '15px', fontSize: '14px' }}><strong>{naira(availableForEvent)}</strong></td>
                       <td style={{ padding: '15px' }}>
-                        <button 
+                        <button
                           onClick={() => setSelectedEventForPayout(evt)}
-                          disabled={netEventRevenue <= 0}
-                          style={{ 
-                            background: netEventRevenue > 0 ? 'var(--primary)' : '#ccc', 
-                            color: 'white', 
-                            padding: '8px 16px', 
-                            borderRadius: '6px', 
-                            border: 'none', 
-                            cursor: netEventRevenue > 0 ? 'pointer' : 'not-allowed',
+                          disabled={availableForEvent <= 0}
+                          style={{
+                            background: availableForEvent > 0 ? 'var(--primary)' : '#ccc',
+                            color: 'white',
+                            padding: '8px 16px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: availableForEvent > 0 ? 'pointer' : 'not-allowed',
                             fontSize: '13px',
                             fontWeight: '600'
                           }}
@@ -243,7 +300,7 @@ const Wallet = () => {
       {/* TRANSACTION HISTORY TABLE WITH PAGINATION */}
       <div style={{ marginTop: '40px', background: 'white', padding: '25px', borderRadius: '16px', border: '1px solid #eee' }}>
         <h3 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '20px', marginBottom: '20px' }}>Transaction History</h3>
-        
+
         <div className="table-responsive-wrapper" style={{ border: 'none' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '650px' }}>
             <thead>
@@ -265,7 +322,7 @@ const Wallet = () => {
                     {tx.description}
                   </td>
                   <td style={{ padding: '15px', whiteSpace: 'nowrap' }}>
-                    <span style={{ 
+                    <span style={{
                       padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold',
                       background: tx.type === 'credit' ? '#e6f9f0' : '#ffe6e6',
                       color: tx.type === 'credit' ? '#00b060' : '#cc0000'
@@ -274,19 +331,19 @@ const Wallet = () => {
                     </span>
                   </td>
                   <td style={{ padding: '15px', fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap' }}>
-                    ₦{tx.amount.toLocaleString()}
+                    {naira(tx.amount)}
                   </td>
                   <td style={{ padding: '15px', whiteSpace: 'nowrap' }}>
-                    <span style={{ 
+                    <span style={{
                       textTransform: 'capitalize', fontWeight: 'bold', fontSize: '13px',
-                      color: tx.status === 'pending' ? '#f5a623' : tx.status === 'rejected' ? '#cc0000' : '#00b060' 
+                      color: tx.status === 'pending' ? '#f5a623' : tx.status === 'rejected' ? '#cc0000' : '#00b060'
                     }}>
                       {tx.status}
                     </span>
                   </td>
                 </tr>
               ))}
-              
+
               {(!revenueData.transactions || revenueData.transactions.length === 0) && (
                 <tr>
                   <td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#888', fontSize: '14px' }}>
@@ -301,14 +358,14 @@ const Wallet = () => {
         {/* Pagination Controls */}
         {totalPages > 1 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #eee', flexWrap: 'wrap', gap: '10px' }}>
-            <button 
-              onClick={handlePrev} 
+            <button
+              onClick={handlePrev}
               disabled={currentPage === 1}
-              style={{ 
-                padding: '8px 16px', 
-                borderRadius: '6px', 
-                border: '1px solid #ddd', 
-                background: 'white', 
+              style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                border: '1px solid #ddd',
+                background: 'white',
                 cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
                 opacity: currentPage === 1 ? 0.5 : 1,
                 fontWeight: '600',
@@ -317,19 +374,19 @@ const Wallet = () => {
             >
               ← Previous
             </button>
-            
+
             <span style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
               Page {currentPage} of {totalPages}
             </span>
 
-            <button 
-              onClick={handleNext} 
+            <button
+              onClick={handleNext}
               disabled={currentPage === totalPages}
-              style={{ 
-                padding: '8px 16px', 
-                borderRadius: '6px', 
-                border: '1px solid #ddd', 
-                background: 'white', 
+              style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                border: '1px solid #ddd',
+                background: 'white',
                 cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
                 opacity: currentPage === totalPages ? 0.5 : 1,
                 fontWeight: '600',
@@ -341,7 +398,7 @@ const Wallet = () => {
           </div>
         )}
       </div>
-      
+
     </div>
   );
 };
