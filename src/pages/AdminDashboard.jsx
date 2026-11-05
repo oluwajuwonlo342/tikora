@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, CreditCard, Calendar, Users,
-  CheckCircle, Loader, LogOut, ShieldAlert, Trash2, Menu, X, History, Mail
+  CheckCircle, XCircle, Loader, LogOut, ShieldAlert, Trash2, Menu, X, History, Mail
 } from 'lucide-react';
 import api from '../services/api';
 import AdminEmailPanel from './AdminEmailPanel';
 
 // Works out when a payout was approved (uses whichever date field your backend sends)
-const getApprovalDate = (p) => p.approvedAt || p.processedAt || p.paidAt || p.updatedAt || p.createdAt;
+const getApprovalDate = (p) => p.approvedAt || p.rejectedAt || p.processedAt || p.paidAt || p.updatedAt || p.createdAt;
 
 const formatDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
@@ -136,8 +136,61 @@ const AdminDashboard = () => {
     }
   };
 
-  // Works out, for one event, how much has been paid to the organizer
-  // and how much is still owed (collected - platform fee - already paid out).
+  // ==========================================
+  // REJECT PAYOUT
+  // Asks for a reason, tells the backend, then moves the request
+  // out of "Payout Requests" and into "Payout History" as rejected.
+  // ==========================================
+  const handleRejectPayout = async (payoutId) => {
+    const reason = window.prompt(
+      "Why are you rejecting this payout request? The reason is saved with the record."
+    );
+
+    if (reason === null) return; // admin cancelled
+
+    if (!reason.trim()) {
+      alert("Please enter a reason for rejecting this payout.");
+      return;
+    }
+
+    try {
+      const res = await api.post(`/payouts/admin/reject/${payoutId}`, {
+        reason: reason.trim()
+      });
+
+      if (res.data.success) {
+        const rejected = pendingPayouts.find(p => p._id === payoutId);
+
+        if (rejected) {
+          setPayoutHistory(prev => [
+            {
+              ...rejected,
+              ...(res.data.payout || {}),
+              status: 'rejected',
+              rejectionReason: res.data.payout?.rejectionReason || reason.trim(),
+              rejectedAt: res.data.payout?.rejectedAt || new Date().toISOString()
+            },
+            ...prev
+          ]);
+        }
+
+        setPendingPayouts(prev => prev.filter(p => p._id !== payoutId));
+        alert("Payout request rejected.");
+      } else {
+        alert(res.data.message || "Failed to reject payout.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert(error.response?.data?.message || "Server error while rejecting payout.");
+    }
+  };
+
+  // Works out the money for one event:
+  //   gross       = total ticket sales
+  //   collected   = gross minus the 7% platform fee (what the organizer can collect)
+  //   paidOut     = payouts already approved
+  //   requested   = payouts waiting for approval
+  //   amountLeft  = collected minus paid out minus requested
   const NOT_PAID_STATUSES = ['rejected', 'failed', 'declined', 'cancelled'];
 
   const getEventPayoutSummary = (event) => {
@@ -147,16 +200,16 @@ const AdminDashboard = () => {
       .filter((p) => matchesEvent(p) && !NOT_PAID_STATUSES.includes(p.status))
       .reduce((sum, p) => sum + (p.amount || 0), 0);
 
-    const pendingRequested = pendingPayouts
+    const requested = pendingPayouts
       .filter(matchesEvent)
       .reduce((sum, p) => sum + (p.amount || 0), 0);
 
-    const collected = event.grossEarned || 0;
+    const gross = event.grossEarned || 0;
     const platformFee = event.platformFee || 0;
-    const organizerShare = Math.max(collected - platformFee, 0);
-    const amountLeft = Math.max(organizerShare - paidOut, 0);
+    const collected = Math.max(gross - platformFee, 0);
+    const amountLeft = Math.max(collected - paidOut - requested, 0);
 
-    return { collected, platformFee, paidOut, pendingRequested, amountLeft };
+    return { gross, platformFee, collected, paidOut, requested, amountLeft };
   };
 
   // --- RENDERERS ---
@@ -196,7 +249,9 @@ const AdminDashboard = () => {
   );
 
   const renderPayoutHistory = () => {
-    const totalPaidOut = payoutHistory.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalPaidOut = payoutHistory
+      .filter((p) => !NOT_PAID_STATUSES.includes(p.status))
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
 
     return (
       <>
@@ -207,20 +262,25 @@ const AdminDashboard = () => {
         </div>
 
         {renderTable(
-          ['Date', 'Time', 'Organizer', 'Event', 'Amount', 'Payment Reference', 'Status'],
+          ['Date', 'Time', 'Organizer', 'Event', 'Amount', 'Reference / Reason', 'Status'],
           payoutHistory,
           (p) => {
             const when = getApprovalDate(p);
+            const isRejected = NOT_PAID_STATUSES.includes(p.status);
             return (
               <tr key={p._id} style={{ borderBottom: '1px solid #eee' }}>
                 <td style={{ padding: '20px 25px', whiteSpace: 'nowrap' }}>{formatDate(when)}</td>
                 <td style={{ padding: '20px 25px', whiteSpace: 'nowrap', color: '#555' }}>{formatTime(when)}</td>
                 <td style={{ padding: '20px 25px', fontWeight: '600' }}>{p.organizer?.name || 'Unknown'}</td>
                 <td style={{ padding: '20px 25px' }}>{p.event?.title || 'Unknown Event'}</td>
-                <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#00b060' }}>₦{(p.amount || 0).toLocaleString()}</td>
-                <td style={{ padding: '20px 25px', fontFamily: 'monospace', fontSize: '13px' }}>{p.paymentReference || '—'}</td>
+                <td style={{ padding: '20px 25px', fontWeight: 'bold', color: isRejected ? '#999' : '#00b060', textDecoration: isRejected ? 'line-through' : 'none' }}>₦{(p.amount || 0).toLocaleString()}</td>
+                {isRejected ? (
+                  <td style={{ padding: '20px 25px', fontSize: '13px', color: '#cc0000', maxWidth: '260px' }}>{p.rejectionReason || '—'}</td>
+                ) : (
+                  <td style={{ padding: '20px 25px', fontFamily: 'monospace', fontSize: '13px' }}>{p.paymentReference || '—'}</td>
+                )}
                 <td style={{ padding: '20px 25px' }}>
-                  <span style={{ background: '#e6f7ee', color: '#00b060', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                  <span style={{ background: isRejected ? '#ffe6e6' : '#e6f7ee', color: isRejected ? '#cc0000' : '#00b060', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>
                     {p.status}
                   </span>
                 </td>
@@ -397,6 +457,12 @@ const AdminDashboard = () => {
                       >
                         <CheckCircle size={16} /> Approve
                       </button>
+                      <button
+                        onClick={() => handleRejectPayout(p._id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#ffe6e6', color: '#cc0000', border: 'none', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+                      >
+                        <XCircle size={16} /> Reject
+                      </button>
                     </td>
                   </tr>
                 )
@@ -423,7 +489,7 @@ const AdminDashboard = () => {
               )}
 
               {activeTab === 'events' && renderTable(
-                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Amount Collected', 'Platform Fee (7%)', 'Paid Out', 'Amount Left', 'Action'],
+                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Gross Amount', 'Platform Fee (7%)', 'Amount Collected', 'Requested / Paid Out', 'Amount Left', 'Action'],
                 eventsList,
                 (e) => {
                   const totalSold = e.tickets && e.tickets.length > 0
@@ -431,7 +497,7 @@ const AdminDashboard = () => {
                     : (e.eventTicketsSold || 0);
 
                   // Collected / fee come from the backend; paid out and left are worked out from payouts
-                  const { collected: grossEarned, platformFee, paidOut, pendingRequested, amountLeft } = getEventPayoutSummary(e);
+                  const { gross: grossEarned, platformFee, collected, paidOut, requested, amountLeft } = getEventPayoutSummary(e);
 
                   return (
                     <tr key={e._id} style={{ borderBottom: '1px solid #eee' }}>
@@ -462,15 +528,18 @@ const AdminDashboard = () => {
                       </td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{grossEarned.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#e65100' }}>₦{platformFee.toLocaleString()}</td>
-                      <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#00b060' }}>₦{paidOut.toLocaleString()}</td>
+                      <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#111' }}>₦{collected.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px', whiteSpace: 'nowrap' }}>
-                        <strong style={{ color: amountLeft > 0 ? '#111' : '#999' }}>₦{amountLeft.toLocaleString()}</strong>
-                        {pendingRequested > 0 && (
-                          <div style={{ fontSize: '12px', color: '#b36b00', marginTop: '4px' }}>
-                            ₦{pendingRequested.toLocaleString()} requested
+                        <strong>₦{(paidOut + requested).toLocaleString()}</strong>
+                        {(paidOut > 0 || requested > 0) && (
+                          <div style={{ fontSize: '12px', marginTop: '4px' }}>
+                            {paidOut > 0 && <span style={{ color: '#00b060' }}>₦{paidOut.toLocaleString()} paid</span>}
+                            {paidOut > 0 && requested > 0 && <span style={{ color: '#999' }}> · </span>}
+                            {requested > 0 && <span style={{ color: '#b36b00' }}>₦{requested.toLocaleString()} pending</span>}
                           </div>
                         )}
                       </td>
+                      <td style={{ padding: '20px 25px', fontWeight: 'bold', whiteSpace: 'nowrap', color: amountLeft > 0 ? '#00b060' : '#999' }}>₦{amountLeft.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px' }}>
                         <button style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'white', background: '#cc0000', border: 'none', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
                           <Trash2 size={16} /> Delete
