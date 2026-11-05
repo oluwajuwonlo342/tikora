@@ -83,7 +83,13 @@ function Dashboard() {
 
         if (!isOrganizer) return;
 
-        const response = await api.get("/events/organizer/stats");
+        // Stats gives the events and ticket counts. The balances route is the
+        // single source of truth for money, so these figures match the Wallet
+        // page and what a payout request is checked against.
+        const [response, balancesResponse] = await Promise.all([
+          api.get("/events/organizer/stats"),
+          api.get("/payouts/my-balances").catch(() => null),
+        ]);
 
         if (cancelled) return;
 
@@ -96,13 +102,34 @@ function Dashboard() {
           data.data?.events ||
           (Array.isArray(data.data) ? data.data : []);
 
+        const balances = balancesResponse?.data?.success
+          ? balancesResponse.data.balances
+          : null;
+
+        // Gross revenue = everything earned from ticket sales,
+        // BEFORE any withdrawals (so it never goes down when you withdraw).
+        const grossRevenue = balances
+          ? Object.values(balances).reduce((sum, b) => sum + (b.totalEarned || 0), 0)
+          : Number(result.totalRevenue) || 0;
+
         setStats({
           totalEvents: Number(result.totalEvents) || 0,
           totalTicketsSold: Number(result.totalTicketsSold) || 0,
-          totalRevenue: Number(result.totalRevenue) || 0,
+          totalRevenue: grossRevenue,
         });
 
-        setEvents(Array.isArray(eventList) ? eventList : []);
+        const loadedEvents = Array.isArray(eventList) ? eventList : [];
+
+        setEvents(
+          balances
+            ? loadedEvents.map((evt) => {
+                const balance = balances[evt._id || evt.id];
+                return balance
+                  ? { ...evt, eventRevenue: balance.totalEarned }
+                  : evt;
+              })
+            : loadedEvents
+        );
       } catch (error) {
         if (!cancelled) {
           console.error(
