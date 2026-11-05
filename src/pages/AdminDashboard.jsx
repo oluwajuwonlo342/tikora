@@ -82,15 +82,6 @@ const AdminDashboard = () => {
     navigate('/admin/login');
   };
 
-  // ==========================================
-  // APPROVE PAYOUT — MANUAL TRANSFER
-  //
-  // The backend no longer calls Paystack's Transfer API (Starter Business
-  // accounts can't send to third parties). Instead, you send the money
-  // yourself via your own bank app using the bank details shown in the
-  // table below, then enter that transfer's reference here as proof
-  // before the payout is marked approved.
-  // ==========================================
   const handleApprovePayout = async (payoutId) => {
     const paymentReference = window.prompt(
       "Enter the bank transaction reference for the transfer you just sent to the organizer:"
@@ -136,11 +127,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // ==========================================
-  // REJECT PAYOUT
-  // Asks for a reason, tells the backend, then moves the request
-  // out of "Payout Requests" and into "Payout History" as rejected.
-  // ==========================================
   const handleRejectPayout = async (payoutId) => {
     const reason = window.prompt(
       "Why are you rejecting this payout request? The reason is saved with the record."
@@ -185,12 +171,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // Works out the money for one event:
-  //   gross       = total ticket sales
-  //   collected   = gross minus the 7% platform fee (what the organizer can collect)
-  //   paidOut     = payouts already approved
-  //   requested   = payouts waiting for approval
-  //   amountLeft  = collected minus paid out minus requested
   const NOT_PAID_STATUSES = ['rejected', 'failed', 'declined', 'cancelled'];
 
   const getEventPayoutSummary = (event) => {
@@ -206,10 +186,11 @@ const AdminDashboard = () => {
 
     const gross = event.grossEarned || 0;
     const platformFee = event.platformFee || 0;
-    const collected = Math.max(gross - platformFee, 0);
-    const amountLeft = Math.max(collected - paidOut - requested, 0);
+    
+    // UPDATED CALCULATION: Gross Amount minus what is paid/requested
+    const amountLeft = Math.max(gross - paidOut - requested, 0);
 
-    return { gross, platformFee, collected, paidOut, requested, amountLeft };
+    return { gross, platformFee, paidOut, requested, amountLeft };
   };
 
   // --- RENDERERS ---
@@ -488,16 +469,17 @@ const AdminDashboard = () => {
                 )
               )}
 
+              {/* UPDATED EVENTS TABLE */}
               {activeTab === 'events' && renderTable(
-                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Gross Amount', 'Platform Fee (7%)', 'Amount Collected', 'Requested / Paid Out', 'Amount Left', 'Action'],
+                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Gross Amount', 'Platform Fee (7%)', 'Requested / Paid Out', 'Amount Left', 'Action'],
                 eventsList,
                 (e) => {
                   const totalSold = e.tickets && e.tickets.length > 0
                     ? e.tickets.reduce((sum, tier) => sum + (tier.sold || 0), 0)
                     : (e.eventTicketsSold || 0);
 
-                  // Collected / fee come from the backend; paid out and left are worked out from payouts
-                  const { gross: grossEarned, platformFee, collected, paidOut, requested, amountLeft } = getEventPayoutSummary(e);
+                  // Using the updated summary function
+                  const { gross: grossEarned, platformFee, paidOut, requested, amountLeft } = getEventPayoutSummary(e);
 
                   return (
                     <tr key={e._id} style={{ borderBottom: '1px solid #eee' }}>
@@ -527,8 +509,10 @@ const AdminDashboard = () => {
                         )}
                       </td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{grossEarned.toLocaleString()}</td>
+                      
+                      {/* Platform Fee Kept intact */}
                       <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#e65100' }}>₦{platformFee.toLocaleString()}</td>
-                      <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#111' }}>₦{collected.toLocaleString()}</td>
+
                       <td style={{ padding: '20px 25px', whiteSpace: 'nowrap' }}>
                         <strong>₦{(paidOut + requested).toLocaleString()}</strong>
                         {(paidOut > 0 || requested > 0) && (
