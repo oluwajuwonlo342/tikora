@@ -82,6 +82,15 @@ const AdminDashboard = () => {
     navigate('/admin/login');
   };
 
+  // ==========================================
+  // APPROVE PAYOUT — MANUAL TRANSFER
+  //
+  // The backend no longer calls Paystack's Transfer API (Starter Business
+  // accounts can't send to third parties). Instead, you send the money
+  // yourself via your own bank app using the bank details shown in the
+  // table below, then enter that transfer's reference here as proof
+  // before the payout is marked approved.
+  // ==========================================
   const handleApprovePayout = async (payoutId) => {
     const paymentReference = window.prompt(
       "Enter the bank transaction reference for the transfer you just sent to the organizer:"
@@ -127,6 +136,11 @@ const AdminDashboard = () => {
     }
   };
 
+  // ==========================================
+  // REJECT PAYOUT
+  // Asks for a reason, tells the backend, then moves the request
+  // out of "Payout Requests" and into "Payout History" as rejected.
+  // ==========================================
   const handleRejectPayout = async (payoutId) => {
     const reason = window.prompt(
       "Why are you rejecting this payout request? The reason is saved with the record."
@@ -171,6 +185,12 @@ const AdminDashboard = () => {
     }
   };
 
+  // Works out the money for one event:
+  //   gross       = total ticket sales
+  //   collected   = gross minus the 7% platform fee (what the organizer can collect)
+  //   paidOut     = payouts already approved
+  //   requested   = payouts waiting for approval
+  //   amountLeft  = collected minus paid out minus requested
   const NOT_PAID_STATUSES = ['rejected', 'failed', 'declined', 'cancelled'];
 
   const getEventPayoutSummary = (event) => {
@@ -186,11 +206,17 @@ const AdminDashboard = () => {
 
     const gross = event.grossEarned || 0;
     const platformFee = event.platformFee || 0;
-    
-    // UPDATED CALCULATION: Gross Amount minus what is paid/requested
-    const amountLeft = Math.max(gross - paidOut - requested, 0);
 
-    return { gross, platformFee, paidOut, requested, amountLeft };
+    // Collected = what the organizer earned from their own ticket prices:
+    // price x number sold for every ticket type (the platform fee is paid by
+    // buyers on top, so it is not part of this). Same rule as the server.
+    const tiers = Array.isArray(event.tickets) ? event.tickets : [];
+    const collected = tiers.length > 0
+      ? tiers.reduce((sum, t) => sum + (Number(t.price) || 0) * (Number(t.sold) || 0), 0)
+      : Math.max(gross - platformFee, 0);
+    const amountLeft = Math.max(collected - paidOut - requested, 0);
+
+    return { gross, platformFee, collected, paidOut, requested, amountLeft };
   };
 
   // --- RENDERERS ---
@@ -438,107 +464,4 @@ const AdminDashboard = () => {
                       >
                         <CheckCircle size={16} /> Approve
                       </button>
-                      <button
-                        onClick={() => handleRejectPayout(p._id)}
-                        style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#ffe6e6', color: '#cc0000', border: 'none', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
-                      >
-                        <XCircle size={16} /> Reject
-                      </button>
-                    </td>
-                  </tr>
-                )
-              )}
-
-              {activeTab === 'history' && renderPayoutHistory()}
-
-              {activeTab === 'emails' && <AdminEmailPanel />}
-
-              {activeTab === 'users' && renderTable(
-                ['Name', 'Email', 'Role', 'Status', 'Action'],
-                usersList,
-                (u) => (
-                  <tr key={u._id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '20px 25px', fontWeight: '600' }}>{u.name}</td>
-                    <td style={{ padding: '20px 25px', color: '#555' }}>{u.email}</td>
-                    <td style={{ padding: '20px 25px' }}><span style={{ background: u.role === 'admin' ? '#ff5a36' : '#eee', color: u.role === 'admin' ? 'white' : '#333', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>{u.role}</span></td>
-                    <td style={{ padding: '20px 25px', color: u.isActive ? '#00b060' : '#cc0000', fontWeight: 'bold' }}>{u.isActive ? 'Active' : 'Suspended'}</td>
-                    <td style={{ padding: '20px 25px' }}>
-                      <button style={{ color: '#cc0000', background: '#ffe6e6', border: 'none', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Ban User</button>
-                    </td>
-                  </tr>
-                )
-              )}
-
-              {/* UPDATED EVENTS TABLE */}
-              {activeTab === 'events' && renderTable(
-                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Gross Amount', 'Platform Fee (7%)', 'Requested / Paid Out', 'Amount Left', 'Action'],
-                eventsList,
-                (e) => {
-                  const totalSold = e.tickets && e.tickets.length > 0
-                    ? e.tickets.reduce((sum, tier) => sum + (tier.sold || 0), 0)
-                    : (e.eventTicketsSold || 0);
-
-                  // Using the updated summary function
-                  const { gross: grossEarned, platformFee, paidOut, requested, amountLeft } = getEventPayoutSummary(e);
-
-                  return (
-                    <tr key={e._id} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: '20px 25px', fontWeight: '600' }}>{e.title}</td>
-                      <td style={{ padding: '20px 25px' }}>{e.organizer?.name || 'Unknown'}</td>
-                      <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>{totalSold}</td>
-                      <td style={{ padding: '20px 25px', minWidth: '220px' }}>
-                        {e.tickets && e.tickets.length > 0 ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {e.tickets.map((tier) => (
-                              <div
-                                key={tier._id || tier.name}
-                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', background: '#f8f9fa', border: '1px solid #eee', borderRadius: '8px', padding: '6px 12px' }}
-                              >
-                                <span style={{ fontWeight: '600', color: '#111' }}>{tier.name}</span>
-                                <span style={{ whiteSpace: 'nowrap' }}>
-                                  <strong style={{ color: '#ff5a36' }}>{tier.sold || 0}</strong>
-                                  {tier.quantity !== undefined && (
-                                    <span style={{ color: '#999', fontSize: '12px' }}> / {tier.quantity}</span>
-                                  )}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <span style={{ color: '#999' }}>No ticket types</span>
-                        )}
-                      </td>
-                      <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{grossEarned.toLocaleString()}</td>
-                      
-                      {/* Platform Fee Kept intact */}
-                      <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#e65100' }}>₦{platformFee.toLocaleString()}</td>
-
-                      <td style={{ padding: '20px 25px', whiteSpace: 'nowrap' }}>
-                        <strong>₦{(paidOut + requested).toLocaleString()}</strong>
-                        {(paidOut > 0 || requested > 0) && (
-                          <div style={{ fontSize: '12px', marginTop: '4px' }}>
-                            {paidOut > 0 && <span style={{ color: '#00b060' }}>₦{paidOut.toLocaleString()} paid</span>}
-                            {paidOut > 0 && requested > 0 && <span style={{ color: '#999' }}> · </span>}
-                            {requested > 0 && <span style={{ color: '#b36b00' }}>₦{requested.toLocaleString()} pending</span>}
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: '20px 25px', fontWeight: 'bold', whiteSpace: 'nowrap', color: amountLeft > 0 ? '#00b060' : '#999' }}>₦{amountLeft.toLocaleString()}</td>
-                      <td style={{ padding: '20px 25px' }}>
-                        <button style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'white', background: '#cc0000', border: 'none', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-                          <Trash2 size={16} /> Delete
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                }
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    </>
-  );
-};
-
-export default AdminDashboard;
+           
