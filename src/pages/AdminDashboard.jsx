@@ -136,6 +136,29 @@ const AdminDashboard = () => {
     }
   };
 
+  // Works out, for one event, how much has been paid to the organizer
+  // and how much is still owed (collected - platform fee - already paid out).
+  const NOT_PAID_STATUSES = ['rejected', 'failed', 'declined', 'cancelled'];
+
+  const getEventPayoutSummary = (event) => {
+    const matchesEvent = (p) => (p.event?._id || p.event) === event._id;
+
+    const paidOut = payoutHistory
+      .filter((p) => matchesEvent(p) && !NOT_PAID_STATUSES.includes(p.status))
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    const pendingRequested = pendingPayouts
+      .filter(matchesEvent)
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    const collected = event.grossEarned || 0;
+    const platformFee = event.platformFee || 0;
+    const organizerShare = Math.max(collected - platformFee, 0);
+    const amountLeft = Math.max(organizerShare - paidOut, 0);
+
+    return { collected, platformFee, paidOut, pendingRequested, amountLeft };
+  };
+
   // --- RENDERERS ---
 
   const renderOverview = () => (
@@ -400,16 +423,15 @@ const AdminDashboard = () => {
               )}
 
               {activeTab === 'events' && renderTable(
-                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Gross Amount', 'Platform Fee (7%)', 'Action'],
+                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Amount Collected', 'Platform Fee (7%)', 'Paid Out', 'Amount Left', 'Action'],
                 eventsList,
                 (e) => {
                   const totalSold = e.tickets && e.tickets.length > 0
                     ? e.tickets.reduce((sum, tier) => sum + (tier.sold || 0), 0)
                     : (e.eventTicketsSold || 0);
 
-                  // Use variables computed in the backend, default to 0 if not yet available
-                  const grossEarned = e.grossEarned || 0;
-                  const platformFee = e.platformFee || 0;
+                  // Collected / fee come from the backend; paid out and left are worked out from payouts
+                  const { collected: grossEarned, platformFee, paidOut, pendingRequested, amountLeft } = getEventPayoutSummary(e);
 
                   return (
                     <tr key={e._id} style={{ borderBottom: '1px solid #eee' }}>
@@ -440,6 +462,15 @@ const AdminDashboard = () => {
                       </td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{grossEarned.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#e65100' }}>₦{platformFee.toLocaleString()}</td>
+                      <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#00b060' }}>₦{paidOut.toLocaleString()}</td>
+                      <td style={{ padding: '20px 25px', whiteSpace: 'nowrap' }}>
+                        <strong style={{ color: amountLeft > 0 ? '#111' : '#999' }}>₦{amountLeft.toLocaleString()}</strong>
+                        {pendingRequested > 0 && (
+                          <div style={{ fontSize: '12px', color: '#b36b00', marginTop: '4px' }}>
+                            ₦{pendingRequested.toLocaleString()} requested
+                          </div>
+                        )}
+                      </td>
                       <td style={{ padding: '20px 25px' }}>
                         <button style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'white', background: '#cc0000', border: 'none', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
                           <Trash2 size={16} /> Delete
