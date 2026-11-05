@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Loader, CheckCircle, AlertCircle } from 'lucide-react';
 import api from '../services/api';
 
+const formatNaira = (value) => `₦${(Number(value) || 0).toLocaleString()}`;
+
 const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
   const [amount, setAmount] = useState('');
   const [bankCode, setBankCode] = useState('');
@@ -9,9 +11,14 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
 
-  // Bank list — fetched live from Paystack via our backend instead of a
-  // hardcoded array, so every supported bank is available and codes stay
-  // correct even if Paystack adds or changes one.
+  // The real balance, asked from the server. It uses the exact same
+  // calculation the server checks when the request is submitted, so the
+  // number shown here can never disagree with the "insufficient balance" check.
+  // The availableBalance prop is only used while this is loading.
+  const [balance, setBalance] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(true);
+
+  // Bank list — fetched live from Paystack via our backend
   const [banks, setBanks] = useState([]);
   const [banksLoading, setBanksLoading] = useState(true);
   const [banksError, setBanksError] = useState('');
@@ -20,6 +27,32 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const available = balance ? balance.available : Number(availableBalance) || 0;
+
+  // Fetch the live balance for this event
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchBalance = async () => {
+      setBalanceLoading(true);
+      try {
+        const response = await api.get(`/payouts/balance/${eventId}`);
+        if (!cancelled && response.data.success) {
+          setBalance(response.data.balance);
+        }
+      } catch (err) {
+        console.error('Could not load payout balance:', err.response?.data || err.message);
+      } finally {
+        if (!cancelled) setBalanceLoading(false);
+      }
+    };
+
+    fetchBalance();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
 
   // Fetch the bank list once on mount
   useEffect(() => {
@@ -88,8 +121,8 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
     setError('');
     setSuccess('');
 
-    if (Number(amount) > availableBalance) {
-      setError(`You cannot request more than your available balance of ₦${availableBalance}`);
+    if (Number(amount) > available) {
+      setError(`You cannot request more than your available balance of ${formatNaira(available)}`);
       return;
     }
 
@@ -130,6 +163,8 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
     }
   };
 
+  const submitDisabled = !accountName || isSubmitting || Number(amount) <= 0;
+
   return (
     <div style={{ background: 'white', padding: '30px', borderRadius: '16px', border: '1px solid #eaeaea' }}>
       <h3 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '20px', marginBottom: '20px' }}>
@@ -137,12 +172,19 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
       </h3>
 
       {/* Available Balance Display */}
-      <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '8px', marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '8px', marginBottom: balance ? '10px' : '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ color: '#666' }}>Available to Withdraw:</span>
         <strong style={{ fontSize: '18px', color: 'var(--primary, #ff5a36)' }}>
-          ₦{availableBalance.toLocaleString()}
+          {balanceLoading ? 'Checking...' : formatNaira(available)}
         </strong>
       </div>
+
+      {/* Where the number comes from */}
+      {balance && (
+        <p style={{ color: '#888', fontSize: '12px', margin: '0 0 25px', lineHeight: 1.6 }}>
+          Earned {formatNaira(balance.totalEarned)} · Paid out {formatNaira(balance.paid)} · Pending {formatNaira(balance.pending)}
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
 
@@ -152,7 +194,7 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
           <input
             type="number"
             min="100"
-            max={availableBalance}
+            max={available}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             required
@@ -244,13 +286,13 @@ const PayoutRequestForm = ({ eventId, availableBalance = 0, onSuccess }) => {
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={!accountName || isSubmitting || Number(amount) <= 0}
+          disabled={submitDisabled}
           className="btn btn-primary"
           style={{
             marginTop: '10px',
             padding: '12px',
-            opacity: (!accountName || isSubmitting || Number(amount) <= 0) ? 0.6 : 1,
-            cursor: (!accountName || isSubmitting || Number(amount) <= 0) ? 'not-allowed' : 'pointer',
+            opacity: submitDisabled ? 0.6 : 1,
+            cursor: submitDisabled ? 'not-allowed' : 'pointer',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
