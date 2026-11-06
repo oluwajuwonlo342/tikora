@@ -27,6 +27,7 @@ const AdminDashboard = () => {
   const [usersList, setUsersList] = useState([]);
   const [eventsList, setEventsList] = useState([]);
   const [pendingPayouts, setPendingPayouts] = useState([]);
+  const [eventBalances, setEventBalances] = useState({});
   const [payoutHistory, setPayoutHistory] = useState([]);
 
   useEffect(() => {
@@ -44,16 +45,20 @@ const AdminDashboard = () => {
     const fetchAdminData = async () => {
       setLoading(true);
       try {
-        const [statsRes, usersRes, eventsRes, payoutsRes] = await Promise.all([
+        const [statsRes, usersRes, eventsRes, payoutsRes, balancesRes] = await Promise.all([
           api.get('/admin/stats'),
           api.get('/admin/users'),
           api.get('/admin/events'),
-          api.get('/payouts/admin/all')
+          api.get('/payouts/admin/all'),
+          // Server-side balances: the same calculation organizers see and payouts are checked against
+          api.get('/payouts/admin/event-balances').catch(() => null)
         ]);
 
         if (statsRes.data.success) setStats(statsRes.data.stats);
         if (usersRes.data.success) setUsersList(usersRes.data.users);
         if (eventsRes.data.success) setEventsList(eventsRes.data.events);
+
+        if (balancesRes?.data?.success) setEventBalances(balancesRes.data.balances);
 
         if (payoutsRes.data.success) {
           const all = payoutsRes.data.payouts;
@@ -75,6 +80,16 @@ const AdminDashboard = () => {
 
     fetchAdminData();
   }, [navigate]);
+
+  // Re-reads the server balances after a payout is approved or rejected
+  const refreshEventBalances = async () => {
+    try {
+      const res = await api.get('/payouts/admin/event-balances');
+      if (res.data.success) setEventBalances(res.data.balances);
+    } catch (error) {
+      console.error('Could not refresh event balances', error);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -125,6 +140,7 @@ const AdminDashboard = () => {
         }
 
         setPendingPayouts(prev => prev.filter(p => p._id !== payoutId));
+        refreshEventBalances();
         alert("Payout marked as approved and paid.");
         setActiveTab('history'); // show the history right after approving
       } else {
@@ -175,6 +191,7 @@ const AdminDashboard = () => {
         }
 
         setPendingPayouts(prev => prev.filter(p => p._id !== payoutId));
+        refreshEventBalances();
         alert("Payout request rejected.");
       } else {
         alert(res.data.message || "Failed to reject payout.");
@@ -194,6 +211,25 @@ const AdminDashboard = () => {
   const NOT_PAID_STATUSES = ['rejected', 'failed', 'declined', 'cancelled'];
 
   const getEventPayoutSummary = (event) => {
+    const gross = event.grossEarned || 0;
+    const platformFee = event.platformFee || 0;
+
+    // Preferred: the server's balance. Collected is what buyers actually paid
+    // for the organizer's tickets (price saved at purchase), so editing a
+    // ticket price later cannot change it.
+    const serverBalance = eventBalances[event._id];
+    if (serverBalance) {
+      return {
+        gross,
+        platformFee,
+        collected: serverBalance.totalEarned,
+        paidOut: serverBalance.paid,
+        requested: serverBalance.pending,
+        amountLeft: serverBalance.available
+      };
+    }
+
+    // Fallback if the balances request is unavailable (less exact)
     const matchesEvent = (p) => (p.event?._id || p.event) === event._id;
 
     const paidOut = payoutHistory
@@ -204,16 +240,7 @@ const AdminDashboard = () => {
       .filter(matchesEvent)
       .reduce((sum, p) => sum + (p.amount || 0), 0);
 
-    const gross = event.grossEarned || 0;
-    const platformFee = event.platformFee || 0;
-
-    // Collected = what the organizer earned from their own ticket prices:
-    // price x number sold for every ticket type (the platform fee is paid by
-    // buyers on top, so it is not part of this). Same rule as the server.
-    const tiers = Array.isArray(event.tickets) ? event.tickets : [];
-    const collected = tiers.length > 0
-      ? tiers.reduce((sum, t) => sum + (Number(t.price) || 0) * (Number(t.sold) || 0), 0)
-      : Math.max(gross - platformFee, 0);
+    const collected = Math.max(gross - platformFee, 0);
     const amountLeft = Math.max(collected - paidOut - requested, 0);
 
     return { gross, platformFee, collected, paidOut, requested, amountLeft };
