@@ -16,7 +16,7 @@ import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
 
 // Ensure this path matches where you saved the EventOrganizerModal component
-import EventOrganizerModal from "./EventOrganizerModal"; 
+import EventOrganizerModal from "../components/EventOrganizerModal";
 
 function MyEvents() {
   const navigate = useNavigate();
