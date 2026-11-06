@@ -9,10 +9,14 @@ import {
   Pencil,
   Trash2,
   Eye,
+  Users, // Added Users icon
 } from "lucide-react";
 
 import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
+
+// Ensure this path matches where you saved the EventOrganizerModal component
+import EventOrganizerModal from "./EventOrganizerModal"; 
 
 function MyEvents() {
   const navigate = useNavigate();
@@ -21,6 +25,9 @@ function MyEvents() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState(null);
+  
+  // State to control the management modal
+  const [selectedEventForManagement, setSelectedEventForManagement] = useState(null);
 
   // ==========================================
   // FETCH ORGANIZER EVENTS
@@ -381,12 +388,13 @@ function MyEvents() {
                   </Link>
 
                   {/* ==================================
-                      EVENT ACTIONS (EDIT / DELETE)
+                      EVENT ACTIONS (MANAGE / EDIT / DELETE)
                   ================================== */}
                   <div
                     className="my-event-actions"
                     style={{
                       display: "flex",
+                      flexWrap: "wrap", // Added so buttons don't crush each other
                       gap: "12px",
                       borderTop: "1px solid #e5e7eb",
                       padding: "16px",
@@ -395,62 +403,96 @@ function MyEvents() {
                       borderBottomRightRadius: "8px"
                     }}
                   >
-                    <Link
-                      to={`/edit-event/${event._id}`}
-                      className="event-edit-btn"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "6px 12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "4px",
-                        fontSize: "14px",
-                        color: "#374151",
-                        textDecoration: "none",
-                        fontWeight: "500"
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Pencil size={15} />
-                      Edit
-                    </Link>
-
+                    {/* MANAGE EVENT BUTTON */}
                     <button
                       type="button"
-                      className="event-delete-btn"
-                      disabled={deletingId === event._id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "6px 12px",
-                        border: "1px solid #fca5a5",
-                        borderRadius: "4px",
-                        fontSize: "14px",
-                        color: "#dc2626",
-                        backgroundColor: "#fef2f2",
-                        cursor: "pointer",
-                        fontWeight: "500"
-                      }}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        handleDeleteEvent(event._id);
+                        setSelectedEventForManagement(event);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flex: "1 1 100%", // Takes full width of the row
+                        gap: "6px",
+                        padding: "10px 12px",
+                        border: "none",
+                        borderRadius: "6px",
+                        fontSize: "14px",
+                        color: "white",
+                        backgroundColor: "#ff5a36",
+                        cursor: "pointer",
+                        fontWeight: "600"
                       }}
                     >
-                      {deletingId === event._id ? (
-                        <>
-                          <span className="button-spinner"></span>
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 size={15} />
-                          Delete
-                        </>
-                      )}
+                      <Users size={16} />
+                      Manage Attendees & Tools
                     </button>
+
+                    <div style={{ display: "flex", gap: "12px", width: "100%" }}>
+                      <Link
+                        to={`/edit-event/${event._id}`}
+                        className="event-edit-btn"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flex: 1,
+                          gap: "6px",
+                          padding: "8px 12px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "4px",
+                          fontSize: "14px",
+                          color: "#374151",
+                          textDecoration: "none",
+                          fontWeight: "500"
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Pencil size={15} />
+                        Edit
+                      </Link>
+
+                      <button
+                        type="button"
+                        className="event-delete-btn"
+                        disabled={deletingId === event._id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flex: 1,
+                          gap: "6px",
+                          padding: "8px 12px",
+                          border: "1px solid #fca5a5",
+                          borderRadius: "4px",
+                          fontSize: "14px",
+                          color: "#dc2626",
+                          backgroundColor: "#fef2f2",
+                          cursor: "pointer",
+                          fontWeight: "500"
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeleteEvent(event._id);
+                        }}
+                      >
+                        {deletingId === event._id ? (
+                          <>
+                            <span className="button-spinner"></span>
+                            Deleting...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 size={15} />
+                            Delete
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -458,6 +500,16 @@ function MyEvents() {
           </div>
         )}
       </div>
+      
+      {/* ========================================
+          MANAGEMENT MODAL (ATTENDEES/EMAIL/QR)
+      ======================================== */}
+      {selectedEventForManagement && (
+        <EventOrganizerModal
+          event={selectedEventForManagement}
+          onClose={() => setSelectedEventForManagement(null)}
+        />
+      )}
     </main>
   );
 }
