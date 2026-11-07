@@ -74,7 +74,7 @@ function Settings() {
   const [user, setUser] = useState(null);
 
   // Profile form
-  const [profile, setProfile] = useState({ name: "", phone: "" });
+  const [profile, setProfile] = useState({ name: "", phone: "", email: "", currentPassword: "" });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState({ type: "", text: "" });
 
@@ -93,7 +93,7 @@ function Settings() {
       const stored = JSON.parse(localStorage.getItem("user"));
       if (!stored) throw new Error("No user");
       setUser(stored);
-      setProfile({ name: stored.name || "", phone: stored.phone || "" });
+      setProfile({ name: stored.name || "", phone: stored.phone || "", email: stored.email || "", currentPassword: "" });
     } catch {
       navigate("/login", { replace: true });
     }
@@ -108,11 +108,26 @@ function Settings() {
       return;
     }
 
+    const newEmail = profile.email.trim().toLowerCase();
+    const emailChanged = newEmail !== (user.email || "").toLowerCase();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      setProfileMsg({ type: "error", text: "Please enter a valid email address." });
+      return;
+    }
+
+    if (emailChanged && !profile.currentPassword) {
+      setProfileMsg({ type: "error", text: "Enter your current password to change your email." });
+      return;
+    }
+
     try {
       setProfileSaving(true);
       const res = await api.put("/auth/profile", {
         name: profile.name.trim(),
         phone: profile.phone.trim(),
+        email: newEmail,
+        ...(emailChanged ? { currentPassword: profile.currentPassword } : {}),
       });
 
       if (res.data.success) {
@@ -120,7 +135,8 @@ function Settings() {
         const updated = { ...user, ...res.data.user };
         localStorage.setItem("user", JSON.stringify(updated));
         setUser(updated);
-        setProfileMsg({ type: "success", text: "Profile updated." });
+        setProfile((prev) => ({ ...prev, email: updated.email || "", currentPassword: "" }));
+        setProfileMsg({ type: "success", text: res.data.message || "Profile updated." });
       }
     } catch (err) {
       setProfileMsg({
@@ -195,7 +211,7 @@ function Settings() {
 
       <h1 style={{ fontSize: "32px", color: "#111", margin: "0 0 6px" }}>Settings</h1>
       <p style={{ color: "#777", margin: "0 0 30px" }}>
-        Manage your account details and password.
+        Manage your name, email, phone number and password.
       </p>
 
       {/* PROFILE */}
@@ -220,11 +236,32 @@ function Settings() {
           <div style={{ marginBottom: "16px" }}>
             <label style={labelStyle}>Email</label>
             <input
-              style={{ ...inputStyle, background: "#f5f5f5", color: "#888" }}
-              value={user.email || ""}
-              disabled
+              type="email"
+              style={inputStyle}
+              value={profile.email}
+              onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+              required
             />
           </div>
+
+          {/* Only shown when the email is being changed */}
+          {profile.email.trim().toLowerCase() !== (user.email || "").toLowerCase() && (
+            <div style={{ marginBottom: "16px", background: "#fff4e0", padding: "14px", borderRadius: "10px" }}>
+              <label style={{ ...labelStyle, color: "#8a5200" }}>
+                Current password (needed to change your email)
+              </label>
+              <input
+                type="password"
+                style={inputStyle}
+                value={profile.currentPassword}
+                onChange={(e) => setProfile({ ...profile, currentPassword: e.target.value })}
+                autoComplete="current-password"
+              />
+              <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#8a5200" }}>
+                You will use the new email to log in from now on. Check it carefully, because password reset links are sent there.
+              </p>
+            </div>
+          )}
 
           <div style={{ marginBottom: "20px" }}>
             <label style={labelStyle}>Phone number</label>
