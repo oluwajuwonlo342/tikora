@@ -201,7 +201,7 @@ const TicketPurchaseModal = ({ event, onClose, initialTicketId }) => {
 
                 {ticketTier && (
                   <div className="input-group">
-                    <label>Quantity (Max {maxQuantity})</label>
+                    <label>Quantity</label>
                     <QuantityStepper
                       value={quantity}
                       onChange={handleQuantityChange}
@@ -213,9 +213,9 @@ const TicketPurchaseModal = ({ event, onClose, initialTicketId }) => {
                       <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#cc0000' }}>
                         This ticket type is sold out.
                       </p>
-                    ) : availableInTier <= 10 ? (
-                      <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#b36b00' }}>
-                        Only {availableInTier} left
+                    ) : quantity >= maxQuantity ? (
+                      <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#888' }}>
+                        Maximum quantity reached for this order.
                       </p>
                     ) : null}
                   </div>
