@@ -306,3 +306,137 @@ const AdminDashboard = () => {
       alert(error.response?.data?.message || "Server error while rejecting payout.");
     }
   };
+
+  // Works out the money for one event:
+  //   gross       = Gross Revenue: what the organizer earned from ticket sales
+  //                 (the 7% platform fee paid by buyers on top is NOT included)
+  //   paidOut     = payouts already approved
+  //   requested   = payouts waiting for approval
+  //   amountLeft  = gross - (paid out + requested)
+  const NOT_PAID_STATUSES = ['rejected', 'failed', 'declined', 'cancelled'];
+
+  const getEventPayoutSummary = (event) => {
+    const platformFee = event.platformFee || 0;
+
+    let gross;
+    let paidOut;
+    let requested;
+
+    // Preferred: the server's figures. Gross is what buyers actually paid for the
+    // organizer's tickets (price saved at purchase), so editing a ticket price
+    // later cannot change it. It is the same Gross Revenue the organizer sees.
+    const serverBalance = eventBalances[event._id];
+
+    if (serverBalance) {
+      gross = serverBalance.totalEarned;
+      paidOut = serverBalance.paid;
+      requested = serverBalance.pending;
+    } else {
+      // Fallback if the balances request is unavailable (less exact)
+      const matchesEvent = (p) => (p.event?._id || p.event) === event._id;
+
+      gross = Math.max((event.grossEarned || 0) - platformFee, 0);
+
+      paidOut = payoutHistory
+        .filter((p) => matchesEvent(p) && !NOT_PAID_STATUSES.includes(p.status))
+        .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+      requested = pendingPayouts
+        .filter(matchesEvent)
+        .reduce((sum, p) => sum + (p.amount || 0), 0);
+    }
+
+    // Always worked out from the numbers shown, so the table adds up on screen
+    const amountLeft = Math.max(gross - paidOut - requested, 0);
+
+    return { gross, platformFee, paidOut, requested, amountLeft };
+  };
+
+  // --- RENDERERS ---
+
+  const renderOverview = () => (
+    <div className="stat-grid">
+      <div style={{ padding: '30px', background: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <span style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>Platform Revenue (7% Fees)</span>
+        <h3 style={{ color: '#111', fontSize: '36px', margin: '10px 0 0 0' }}>₦{stats.totalRevenue.toLocaleString()}</h3>
+      </div>
+      <div style={{ padding: '30px', background: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <span style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>Total Registered Users</span>
+        <h3 style={{ color: 'var(--primary)', fontSize: '36px', margin: '10px 0 0 0' }}>{stats.totalUsers}</h3>
+      </div>
+      <div style={{ padding: '30px', background: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <span style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>Active Events</span>
+        <h3 style={{ color: '#00b060', fontSize: '36px', margin: '10px 0 0 0' }}>{stats.activeEvents}</h3>
+      </div>
+    </div>
+  );
+
+  const renderTable = (headers, data, renderRow) => (
+    <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <table style={{ width: '100%', minWidth: '700px', textAlign: 'left', borderCollapse: 'collapse' }}>
+        <thead style={{ background: '#f8f9fa', borderBottom: '2px solid #eee' }}>
+          <tr>
+            {headers.map((h, i) => <th key={i} style={{ padding: '18px 25px', color: '#555', fontSize: '14px', whiteSpace: 'nowrap' }}>{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {data.length > 0 ? data.map(renderRow) : (
+            <tr><td colSpan={headers.length} style={{ padding: '30px', textAlign: 'center', color: '#888' }}>No records found.</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderPayoutHistory = () => {
+    const totalPaidOut = payoutHistory
+      .filter((p) => !NOT_PAID_STATUSES.includes(p.status))
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    return (
+      <>
+        <div style={{ padding: '25px 30px', background: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginBottom: '25px', display: 'inline-block', minWidth: '260px' }}>
+          <span style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>Total Paid Out</span>
+          <h3 style={{ color: '#00b060', fontSize: '32px', margin: '8px 0 0 0' }}>₦{totalPaidOut.toLocaleString()}</h3>
+          <span style={{ color: '#999', fontSize: '13px' }}>{payoutHistory.length} payout{payoutHistory.length === 1 ? '' : 's'}</span>
+        </div>
+
+        {renderTable(
+          ['Date', 'Time', 'Organizer', 'Event', 'Amount', 'Reference / Reason', 'Status'],
+          payoutHistory,
+          (p) => {
+            const when = getApprovalDate(p);
+            const isRejected = NOT_PAID_STATUSES.includes(p.status);
+            return (
+              <tr key={p._id} style={{ borderBottom: '1px solid #eee' }}>
+                <td style={{ padding: '20px 25px', whiteSpace: 'nowrap' }}>{formatDate(when)}</td>
+                <td style={{ padding: '20px 25px', whiteSpace: 'nowrap', color: '#555' }}>{formatTime(when)}</td>
+                <td style={{ padding: '20px 25px', fontWeight: '600' }}>{p.organizer?.name || 'Unknown'}</td>
+                <td style={{ padding: '20px 25px' }}>{p.event?.title || 'Unknown Event'}</td>
+                <td style={{ padding: '20px 25px', fontWeight: 'bold', color: isRejected ? '#999' : '#00b060', textDecoration: isRejected ? 'line-through' : 'none' }}>₦{(p.amount || 0).toLocaleString()}</td>
+                {isRejected ? (
+                  <td style={{ padding: '20px 25px', fontSize: '13px', color: '#cc0000', maxWidth: '260px' }}>{p.rejectionReason || '—'}</td>
+                ) : (
+                  <td style={{ padding: '20px 25px', fontFamily: 'monospace', fontSize: '13px' }}>{p.paymentReference || '—'}</td>
+                )}
+                <td style={{ padding: '20px 25px' }}>
+                  <span style={{ background: isRejected ? '#ffe6e6' : '#e6f7ee', color: isRejected ? '#cc0000' : '#00b060', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                    {p.status}
+                  </span>
+                </td>
+              </tr>
+            );
+          }
+        )}
+      </>
+    );
+  };
+
+  const tabTitles = {
+    overview: 'Platform Overview',
+    payouts: 'Payout Requests',
+    history: 'Payout History',
+    users: 'Manage Users',
+    events: 'Event Moderation',
+    emails: 'Send Emails'
+  };
