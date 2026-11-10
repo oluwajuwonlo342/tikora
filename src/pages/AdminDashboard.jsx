@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, CreditCard, Calendar, Users,
-  CheckCircle, XCircle, Loader, LogOut, ShieldAlert, Trash2, Menu, X, History, Mail, Bell
+  CheckCircle, XCircle, Loader, LogOut, ShieldAlert, Trash2, Menu, X, History, Mail
 } from 'lucide-react';
 import api from '../services/api';
 import AdminEmailPanel from './AdminEmailPanel';
@@ -15,28 +15,6 @@ const formatDate = (d) =>
 
 const formatTime = (d) =>
   d ? new Date(d).toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }) : '—';
-
-// Short beep when a new payout request arrives (browsers may block it until the page has been clicked once)
-const playBeep = () => {
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.25);
-    setTimeout(() => ctx.close(), 400);
-  } catch (error) {
-    // Sound is optional, ignore failures
-  }
-};
-
-const POLL_INTERVAL_MS = 30 * 1000; // how often to check for new payout requests
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -51,24 +29,6 @@ const AdminDashboard = () => {
   const [pendingPayouts, setPendingPayouts] = useState([]);
   const [eventBalances, setEventBalances] = useState({});
   const [payoutHistory, setPayoutHistory] = useState([]);
-  const [toasts, setToasts] = useState([]);
-
-  // IDs of pending payout requests the admin has already been told about
-  const knownPendingIds = useRef(new Set());
-  const originalTitle = useRef(document.title);
-
-  // Splits the full payout list into "pending" and "history" and remembers which requests are known
-  const applyPayouts = (all) => {
-    const pending = all.filter(p => p.status === 'pending');
-    setPendingPayouts(pending);
-    knownPendingIds.current = new Set(pending.map(p => p._id));
-
-    // History = everything that is no longer pending, newest first
-    const history = all
-      .filter(p => p.status !== 'pending')
-      .sort((a, b) => new Date(getApprovalDate(b)) - new Date(getApprovalDate(a)));
-    setPayoutHistory(history);
-  };
 
   useEffect(() => {
     const userString = localStorage.getItem('user');
@@ -101,19 +61,15 @@ const AdminDashboard = () => {
         if (balancesRes?.data?.success) setEventBalances(balancesRes.data.balances);
 
         if (payoutsRes.data.success) {
-          applyPayouts(payoutsRes.data.payouts);
+          const all = payoutsRes.data.payouts;
 
-          // If requests are already waiting when you open the dashboard, say so straight away
-          const waiting = payoutsRes.data.payouts.filter(p => p.status === 'pending').length;
-          if (waiting > 0) {
-            setToasts([{
-              id: 'waiting-on-login',
-              title: 'Payout requests waiting',
-              text: waiting === 1
-                ? 'You have 1 payout request waiting for approval.'
-                : `You have ${waiting} payout requests waiting for approval.`
-            }]);
-          }
+          setPendingPayouts(all.filter(p => p.status === 'pending'));
+
+          // History = everything that is no longer pending, newest first
+          const history = all
+            .filter(p => p.status !== 'pending')
+            .sort((a, b) => new Date(getApprovalDate(b)) - new Date(getApprovalDate(a)));
+          setPayoutHistory(history);
         }
       } catch (error) {
         console.error("Failed to load admin data", error);
@@ -124,65 +80,6 @@ const AdminDashboard = () => {
 
     fetchAdminData();
   }, [navigate]);
-  // ==========================================
-  // NEW PAYOUT REQUEST NOTIFICATIONS
-  // Checks for new requests every 30 seconds. When one arrives it shows a
-  // pop-up, plays a beep, reloads the Payout Requests list and updates the
-  // badge and browser tab title.
-  // ==========================================
-  useEffect(() => {
-    if (loading) return undefined;
-    let stopped = false;
-
-    const checkForNewRequests = async () => {
-      try {
-        const res = await api.get('/payouts/admin/pending-summary');
-        if (stopped || !res.data.success) return;
-
-        const { count, latest } = res.data;
-        const newOnes = latest.filter(p => !knownPendingIds.current.has(p._id));
-
-        // Nothing changed since the last check
-        if (newOnes.length === 0 && count === knownPendingIds.current.size) return;
-
-        // Something changed: reload the full list so the table is up to date
-        const all = await api.get('/payouts/admin/all');
-        if (stopped) return;
-        if (all.data.success) applyPayouts(all.data.payouts);
-        refreshEventBalances();
-
-        if (newOnes.length > 0) {
-          const newToasts = newOnes.map(p => ({
-            id: p._id,
-            text: `${p.organizerName || 'An organizer'} requested ₦${(p.amount || 0).toLocaleString()}${p.eventTitle ? ` for ${p.eventTitle}` : ''}`
-          }));
-
-          // Pop-ups stay on screen until you click them or close them
-          setToasts(prev => [...prev, ...newToasts].slice(-4));
-          playBeep();
-        }
-      } catch (error) {
-        console.error('Could not check for new payout requests', error);
-      }
-    };
-
-    const intervalId = setInterval(checkForNewRequests, POLL_INTERVAL_MS);
-    return () => {
-      stopped = true;
-      clearInterval(intervalId);
-    };
-  }, [loading]);
-
-  // Shows the number of waiting requests in the browser tab title, e.g. "(2) Admin Portal"
-  useEffect(() => {
-    const count = pendingPayouts.length;
-    document.title = count > 0 ? `(${count}) Admin Portal` : 'Admin Portal';
-  }, [pendingPayouts.length]);
-
-  useEffect(() => {
-    const title = originalTitle.current;
-    return () => { document.title = title; };
-  }, []);
 
   // Re-reads the server balances after a payout is approved or rejected
   const refreshEventBalances = async () => {
@@ -242,7 +139,6 @@ const AdminDashboard = () => {
           ]);
         }
 
-        knownPendingIds.current.delete(payoutId);
         setPendingPayouts(prev => prev.filter(p => p._id !== payoutId));
         refreshEventBalances();
         alert("Payout marked as approved and paid.");
@@ -294,7 +190,6 @@ const AdminDashboard = () => {
           ]);
         }
 
-        knownPendingIds.current.delete(payoutId);
         setPendingPayouts(prev => prev.filter(p => p._id !== payoutId));
         refreshEventBalances();
         alert("Payout request rejected.");
@@ -308,48 +203,47 @@ const AdminDashboard = () => {
   };
 
   // Works out the money for one event:
-  //   gross       = Gross Revenue: what the organizer earned from ticket sales
-  //                 (the 7% platform fee paid by buyers on top is NOT included)
+  //   gross       = total ticket sales
+  //   collected   = gross minus the 7% platform fee (what the organizer can collect)
   //   paidOut     = payouts already approved
   //   requested   = payouts waiting for approval
-  //   amountLeft  = gross - (paid out + requested)
+  //   amountLeft  = collected minus paid out minus requested
   const NOT_PAID_STATUSES = ['rejected', 'failed', 'declined', 'cancelled'];
 
   const getEventPayoutSummary = (event) => {
+    const gross = event.grossEarned || 0;
     const platformFee = event.platformFee || 0;
 
-    let gross;
-    let paidOut;
-    let requested;
-
-    // Preferred: the server's figures. Gross is what buyers actually paid for the
-    // organizer's tickets (price saved at purchase), so editing a ticket price
-    // later cannot change it. It is the same Gross Revenue the organizer sees.
+    // Preferred: the server's balance. Collected is what buyers actually paid
+    // for the organizer's tickets (price saved at purchase), so editing a
+    // ticket price later cannot change it.
     const serverBalance = eventBalances[event._id];
-
     if (serverBalance) {
-      gross = serverBalance.totalEarned;
-      paidOut = serverBalance.paid;
-      requested = serverBalance.pending;
-    } else {
-      // Fallback if the balances request is unavailable (less exact)
-      const matchesEvent = (p) => (p.event?._id || p.event) === event._id;
-
-      gross = Math.max((event.grossEarned || 0) - platformFee, 0);
-
-      paidOut = payoutHistory
-        .filter((p) => matchesEvent(p) && !NOT_PAID_STATUSES.includes(p.status))
-        .reduce((sum, p) => sum + (p.amount || 0), 0);
-
-      requested = pendingPayouts
-        .filter(matchesEvent)
-        .reduce((sum, p) => sum + (p.amount || 0), 0);
+      return {
+        gross,
+        platformFee,
+        collected: serverBalance.totalEarned,
+        paidOut: serverBalance.paid,
+        requested: serverBalance.pending,
+        amountLeft: serverBalance.available
+      };
     }
 
-    // Always worked out from the numbers shown, so the table adds up on screen
-    const amountLeft = Math.max(gross - paidOut - requested, 0);
+    // Fallback if the balances request is unavailable (less exact)
+    const matchesEvent = (p) => (p.event?._id || p.event) === event._id;
 
-    return { gross, platformFee, paidOut, requested, amountLeft };
+    const paidOut = payoutHistory
+      .filter((p) => matchesEvent(p) && !NOT_PAID_STATUSES.includes(p.status))
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    const requested = pendingPayouts
+      .filter(matchesEvent)
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    const collected = Math.max(gross - platformFee, 0);
+    const amountLeft = Math.max(collected - paidOut - requested, 0);
+
+    return { gross, platformFee, collected, paidOut, requested, amountLeft };
   };
 
   // --- RENDERERS ---
@@ -512,44 +406,9 @@ const AdminDashboard = () => {
         {/* Mobile Overlay */}
         <div className={`overlay ${isSidebarOpen ? 'open' : ''}`} onClick={() => setIsSidebarOpen(false)} />
 
-        {/* New payout request pop-ups */}
-        <div style={{ position: 'fixed', top: '80px', right: '20px', zIndex: 2000, display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: 'calc(100vw - 40px)' }}>
-          {toasts.map(t => (
-            <div
-              key={t.id}
-              onClick={() => {
-                setActiveTab('payouts');
-                setToasts(prev => prev.filter(x => x.id !== t.id));
-              }}
-              style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', background: '#111', color: 'white', padding: '14px 18px', borderRadius: '12px', boxShadow: '0 8px 30px rgba(0,0,0,0.25)', cursor: 'pointer', width: '340px', maxWidth: '100%', borderLeft: '4px solid #ff5a36' }}
-            >
-              <Bell size={20} color="#ff5a36" style={{ flexShrink: 0, marginTop: '2px' }} />
-              <div style={{ flex: 1 }}>
-                <strong style={{ display: 'block', fontSize: '14px', marginBottom: '2px' }}>{t.title || 'New payout request'}</strong>
-                <span style={{ fontSize: '13px', color: '#ccc' }}>{t.text}</span>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setToasts(prev => prev.filter(x => x.id !== t.id));
-                }}
-                aria-label="Dismiss"
-                style={{ background: 'transparent', border: 'none', color: '#999', cursor: 'pointer', padding: 0, flexShrink: 0 }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-          ))}
-        </div>
-
         {/* Mobile Hamburger Button */}
         <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
           {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
-          {pendingPayouts.length > 0 && !isSidebarOpen && (
-            <span style={{ position: 'absolute', top: '-8px', left: '-8px', background: '#cc0000', color: 'white', borderRadius: '20px', minWidth: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold', padding: '0 5px' }}>
-              {pendingPayouts.length}
-            </span>
-          )}
         </button>
 
         {/* PROFESSIONAL SIDEBAR */}
@@ -584,11 +443,6 @@ const AdminDashboard = () => {
                   }}
                 >
                   <tab.icon size={20} /> {tab.label}
-                  {tab.id === 'payouts' && pendingPayouts.length > 0 && (
-                    <span style={{ marginLeft: 'auto', background: '#ff5a36', color: 'white', borderRadius: '20px', padding: '2px 9px', fontSize: '12px', fontWeight: 'bold' }}>
-                      {pendingPayouts.length}
-                    </span>
-                  )}
                 </button>
               </li>
             ))}
@@ -601,6 +455,7 @@ const AdminDashboard = () => {
             <LogOut size={20} /> Secure Logout
           </button>
         </div>
+
         {/* MAIN CONTENT AREA */}
         <div className="admin-main">
           <div style={{ marginBottom: '40px' }}>
@@ -609,23 +464,6 @@ const AdminDashboard = () => {
             </h1>
             <p style={{ color: '#777', marginTop: '8px' }}>Manage and monitor your platform's activity.</p>
           </div>
-
-          {!loading && pendingPayouts.length > 0 && activeTab !== 'payouts' && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '15px', flexWrap: 'wrap', background: '#fff4e0', border: '1px solid #ffd9a0', borderRadius: '12px', padding: '14px 20px', marginBottom: '25px' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#8a5200', fontWeight: 600, fontSize: '14px' }}>
-                <Bell size={18} />
-                {pendingPayouts.length === 1
-                  ? 'You have 1 payout request waiting for approval.'
-                  : `You have ${pendingPayouts.length} payout requests waiting for approval.`}
-              </span>
-              <button
-                onClick={() => setActiveTab('payouts')}
-                style={{ background: '#ff5a36', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}
-              >
-                Review requests
-              </button>
-            </div>
-          )}
 
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
@@ -685,15 +523,15 @@ const AdminDashboard = () => {
               )}
 
               {activeTab === 'events' && renderTable(
-                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Gross Revenue', 'Platform Fee (7%)', 'Requested / Paid Out', 'Amount Left', 'Action'],
+                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Gross Amount', 'Platform Fee (7%)', 'Amount Collected', 'Requested / Paid Out', 'Amount Left', 'Action'],
                 eventsList,
                 (e) => {
                   const totalSold = e.tickets && e.tickets.length > 0
                     ? e.tickets.reduce((sum, tier) => sum + (tier.sold || 0), 0)
                     : (e.eventTicketsSold || 0);
 
-                  // Gross Revenue, paid out and requested come from the server; Amount Left = Gross Revenue - (paid out + requested)
-                  const { gross: grossEarned, platformFee, paidOut, requested, amountLeft } = getEventPayoutSummary(e);
+                  // Collected / fee come from the backend; paid out and left are worked out from payouts
+                  const { gross: grossEarned, platformFee, collected, paidOut, requested, amountLeft } = getEventPayoutSummary(e);
 
                   return (
                     <tr key={e._id} style={{ borderBottom: '1px solid #eee' }}>
@@ -724,6 +562,7 @@ const AdminDashboard = () => {
                       </td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{grossEarned.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#e65100' }}>₦{platformFee.toLocaleString()}</td>
+                      <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#111' }}>₦{collected.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px', whiteSpace: 'nowrap' }}>
                         <strong>₦{(paidOut + requested).toLocaleString()}</strong>
                         {(paidOut > 0 || requested > 0) && (
