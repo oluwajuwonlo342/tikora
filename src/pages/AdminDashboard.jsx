@@ -50,18 +50,22 @@ const AdminDashboard = () => {
           api.get('/admin/users'),
           api.get('/admin/events'),
           api.get('/payouts/admin/all'),
+          // Server-side balances: the same calculation organizers see and payouts are checked against
           api.get('/payouts/admin/event-balances').catch(() => null)
         ]);
 
         if (statsRes.data.success) setStats(statsRes.data.stats);
         if (usersRes.data.success) setUsersList(usersRes.data.users);
         if (eventsRes.data.success) setEventsList(eventsRes.data.events);
+
         if (balancesRes?.data?.success) setEventBalances(balancesRes.data.balances);
 
         if (payoutsRes.data.success) {
           const all = payoutsRes.data.payouts;
+
           setPendingPayouts(all.filter(p => p.status === 'pending'));
 
+          // History = everything that is no longer pending, newest first
           const history = all
             .filter(p => p.status !== 'pending')
             .sort((a, b) => new Date(getApprovalDate(b)) - new Date(getApprovalDate(a)));
@@ -77,6 +81,7 @@ const AdminDashboard = () => {
     fetchAdminData();
   }, [navigate]);
 
+  // Re-reads the server balances after a payout is approved or rejected
   const refreshEventBalances = async () => {
     try {
       const res = await api.get('/payouts/admin/event-balances');
@@ -94,13 +99,19 @@ const AdminDashboard = () => {
 
   // ==========================================
   // APPROVE PAYOUT — MANUAL TRANSFER
+  //
+  // The backend no longer calls Paystack's Transfer API (Starter Business
+  // accounts can't send to third parties). Instead, you send the money
+  // yourself via your own bank app using the bank details shown in the
+  // table below, then enter that transfer's reference here as proof
+  // before the payout is marked approved.
   // ==========================================
   const handleApprovePayout = async (payoutId) => {
     const paymentReference = window.prompt(
       "Enter the bank transaction reference for the transfer you just sent to the organizer:"
     );
 
-    if (paymentReference === null) return; 
+    if (paymentReference === null) return; // user cancelled
 
     if (!paymentReference.trim()) {
       alert("A payment reference is required to approve this payout.");
@@ -115,6 +126,7 @@ const AdminDashboard = () => {
         const approved = pendingPayouts.find(p => p._id === payoutId);
 
         if (approved) {
+          // Add it to the history straight away with the time of approval
           setPayoutHistory(prev => [
             {
               ...approved,
@@ -130,7 +142,7 @@ const AdminDashboard = () => {
         setPendingPayouts(prev => prev.filter(p => p._id !== payoutId));
         refreshEventBalances();
         alert("Payout marked as approved and paid.");
-        setActiveTab('history'); 
+        setActiveTab('history'); // show the history right after approving
       } else {
         alert(res.data.message || "Failed to approve payout.");
       }
@@ -142,13 +154,15 @@ const AdminDashboard = () => {
 
   // ==========================================
   // REJECT PAYOUT
+  // Asks for a reason, tells the backend, then moves the request
+  // out of "Payout Requests" and into "Payout History" as rejected.
   // ==========================================
   const handleRejectPayout = async (payoutId) => {
     const reason = window.prompt(
       "Why are you rejecting this payout request? The reason is saved with the record."
     );
 
-    if (reason === null) return; 
+    if (reason === null) return; // admin cancelled
 
     if (!reason.trim()) {
       alert("Please enter a reason for rejecting this payout.");
@@ -188,47 +202,48 @@ const AdminDashboard = () => {
     }
   };
 
+  // Works out the money for one event:
+  //   gross       = total ticket sales
+  //   collected   = gross minus the 7% platform fee (what the organizer can collect)
+  //   paidOut     = payouts already approved
+  //   requested   = payouts waiting for approval
+  //   amountLeft  = collected minus paid out minus requested
   const NOT_PAID_STATUSES = ['rejected', 'failed', 'declined', 'cancelled'];
 
-  // ==========================================
-  // STRICT PAYOUT SUMMARY (FIXED SYNC)
-  // Ensures Admin numbers exactly match the Organizer Dashboard
-  // by calculating off the exact sold tickets in the database.
-  // ==========================================
   const getEventPayoutSummary = (event) => {
-    // 1. Calculate strictly from DB tickets (Guarantees sync with Organizer)
-    let organizerBaseEarnings = 0;
-    (event.tickets || []).forEach(tier => {
-      organizerBaseEarnings += (Number(tier.sold) || 0) * (Number(tier.price) || 0);
-    });
+    const gross = event.grossEarned || 0;
+    const platformFee = event.platformFee || 0;
 
-    const platformFee = organizerBaseEarnings * 0.07;
-    const totalVolume = organizerBaseEarnings + platformFee; // Total processed by Paystack
+    // Preferred: the server's balance. Collected is what buyers actually paid
+    // for the organizer's tickets (price saved at purchase), so editing a
+    // ticket price later cannot change it.
+    const serverBalance = eventBalances[event._id];
+    if (serverBalance) {
+      return {
+        gross,
+        platformFee,
+        collected: serverBalance.totalEarned,
+        paidOut: serverBalance.paid,
+        requested: serverBalance.pending,
+        amountLeft: serverBalance.available
+      };
+    }
 
-    // 2. Calculate Payouts
+    // Fallback if the balances request is unavailable (less exact)
     const matchesEvent = (p) => (p.event?._id || p.event) === event._id;
+
     const paidOut = payoutHistory
       .filter((p) => matchesEvent(p) && !NOT_PAID_STATUSES.includes(p.status))
       .reduce((sum, p) => sum + (p.amount || 0), 0);
+
     const requested = pendingPayouts
       .filter(matchesEvent)
       .reduce((sum, p) => sum + (p.amount || 0), 0);
 
-    // 3. Apply Server Balances if available, otherwise use our strict fallback
-    const serverBalance = eventBalances[event._id];
-    const collected = serverBalance ? serverBalance.totalEarned : organizerBaseEarnings;
-    const actualPaid = serverBalance ? serverBalance.paid : paidOut;
-    const actualPending = serverBalance ? serverBalance.pending : requested;
-    const amountLeft = serverBalance ? serverBalance.available : Math.max(collected - actualPaid - actualPending, 0);
+    const collected = Math.max(gross - platformFee, 0);
+    const amountLeft = Math.max(collected - paidOut - requested, 0);
 
-    return { 
-      totalVolume, 
-      platformFee, 
-      collected, 
-      paidOut: actualPaid, 
-      requested: actualPending, 
-      amountLeft 
-    };
+    return { gross, platformFee, collected, paidOut, requested, amountLeft };
   };
 
   // --- RENDERERS ---
@@ -345,7 +360,7 @@ const AdminDashboard = () => {
           padding: 50px;
           overflow-y: auto;
           position: relative;
-          min-width: 0;
+          min-width: 0; /* CRITICAL FIX: prevents flexbox children from breaking past the screen width */
         }
 
         /* MOBILE MENU BUTTON & OVERLAY */
@@ -375,6 +390,7 @@ const AdminDashboard = () => {
 
         .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 25px; }
 
+        /* RESPONSIVE BREAKPOINTS (Tablet & Mobile) */
         @media (max-width: 992px) {
           .admin-sidebar { position: fixed; height: 100vh; top: 0; left: 0; transform: translateX(-100%); }
           .admin-sidebar.open { transform: translateX(0); }
@@ -386,11 +402,16 @@ const AdminDashboard = () => {
       `}</style>
 
       <div className="admin-layout">
+
+        {/* Mobile Overlay */}
         <div className={`overlay ${isSidebarOpen ? 'open' : ''}`} onClick={() => setIsSidebarOpen(false)} />
+
+        {/* Mobile Hamburger Button */}
         <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
           {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
 
+        {/* PROFESSIONAL SIDEBAR */}
         <div className={`admin-sidebar ${isSidebarOpen ? 'open' : ''}`}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0 10px', marginBottom: '40px' }}>
             <ShieldAlert size={28} color="#ff5a36" />
@@ -410,7 +431,7 @@ const AdminDashboard = () => {
                 <button
                   onClick={() => {
                     setActiveTab(tab.id);
-                    setIsSidebarOpen(false);
+                    setIsSidebarOpen(false); // Auto-close menu on mobile after clicking a tab
                   }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '15px', width: '100%', padding: '15px',
@@ -435,9 +456,12 @@ const AdminDashboard = () => {
           </button>
         </div>
 
+        {/* MAIN CONTENT AREA */}
         <div className="admin-main">
           <div style={{ marginBottom: '40px' }}>
-            <h1 style={{ fontSize: '32px', color: '#111', margin: 0 }}>{tabTitles[activeTab] || activeTab}</h1>
+            <h1 style={{ fontSize: '32px', color: '#111', margin: 0 }}>
+              {tabTitles[activeTab] || activeTab}
+            </h1>
             <p style={{ color: '#777', marginTop: '8px' }}>Manage and monitor your platform's activity.</p>
           </div>
 
@@ -499,14 +523,15 @@ const AdminDashboard = () => {
               )}
 
               {activeTab === 'events' && renderTable(
-                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Total Paystack Volume', 'Platform Fee (7%)', 'Organizer Earnings', 'Requested / Paid Out', 'Amount Left', 'Action'],
+                ['Event Title', 'Organizer', 'Tickets Sold', 'Ticket Types (Sold)', 'Gross Amount', 'Platform Fee (7%)', 'Amount Collected', 'Requested / Paid Out', 'Amount Left', 'Action'],
                 eventsList,
                 (e) => {
                   const totalSold = e.tickets && e.tickets.length > 0
                     ? e.tickets.reduce((sum, tier) => sum + (tier.sold || 0), 0)
                     : (e.eventTicketsSold || 0);
 
-                  const { totalVolume, platformFee, collected, paidOut, requested, amountLeft } = getEventPayoutSummary(e);
+                  // Collected / fee come from the backend; paid out and left are worked out from payouts
+                  const { gross: grossEarned, platformFee, collected, paidOut, requested, amountLeft } = getEventPayoutSummary(e);
 
                   return (
                     <tr key={e._id} style={{ borderBottom: '1px solid #eee' }}>
@@ -535,7 +560,7 @@ const AdminDashboard = () => {
                           <span style={{ color: '#999' }}>No ticket types</span>
                         )}
                       </td>
-                      <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{totalVolume.toLocaleString()}</td>
+                      <td style={{ padding: '20px 25px', fontWeight: 'bold' }}>₦{grossEarned.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#e65100' }}>₦{platformFee.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px', fontWeight: 'bold', color: '#111' }}>₦{collected.toLocaleString()}</td>
                       <td style={{ padding: '20px 25px', whiteSpace: 'nowrap' }}>
