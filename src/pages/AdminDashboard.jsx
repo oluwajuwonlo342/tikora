@@ -241,7 +241,7 @@ const AdminDashboard = () => {
       .reduce((sum, p) => sum + (p.amount || 0), 0);
 
     const collected = Math.max(gross - platformFee, 0);
-    const amountLeft = Math.max(gross - paidOut - requested, 0);
+    const amountLeft = Math.max(collected - paidOut - requested, 0);
 
     return { gross, platformFee, collected, paidOut, requested, amountLeft };
   };
