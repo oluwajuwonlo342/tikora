@@ -1,15 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
 import { Loader, CheckCircle2, XCircle } from 'lucide-react';
 import api from '../services/api';
 
-// ✅ DEFINED OUTSIDE THE COMPONENT: Survives React Strict Mode, but resets on page refresh!
-let hasAttemptedVerify = false;
-
 const PaymentVerify = () => {
   const [searchParams] = useSearchParams();
-  const reference = searchParams.get('reference');
-  const navigate = useNavigate();
+  // Paystack can return either 'reference' or 'trxref' in the query string
+  const reference = searchParams.get('reference') || searchParams.get('trxref');
+  
+  // Prevents double execution in React StrictMode while resetting cleanly on new component mounts
+  const hasAttemptedVerify = useRef(false);
 
   const [status, setStatus] = useState('verifying');
   const [message, setMessage] = useState('Verifying your payment and generating tickets...');
@@ -22,22 +22,31 @@ const PaymentVerify = () => {
         return;
       }
 
-      // ✅ BLOCK DUPLICATES: Only allow this to run exactly once per page load
-      if (hasAttemptedVerify) return;
-      hasAttemptedVerify = true;
+      if (hasAttemptedVerify.current) return;
+      hasAttemptedVerify.current = true;
 
       try {
         const response = await api.post('/tickets/purchase/verify', { reference });
-        
-        if (response.data.success || response.status === 201 || response.status === 200) {
+
+        if (response.data?.success || response.status === 200 || response.status === 201) {
           setStatus('success');
         } else {
           setStatus('error');
-          setMessage(response.data.message || 'Payment verification failed.');
+          setMessage(response.data?.message || 'Payment verification failed.');
         }
       } catch (err) {
         setStatus('error');
-        setMessage(err.response?.data?.message || 'Server error while verifying payment.');
+        if (err.response?.status === 409) {
+          setMessage(
+            err.response?.data?.message ||
+            'This ticket tier sold out just before your payment completed. Please contact support for a refund.'
+          );
+        } else {
+          setMessage(
+            err.response?.data?.message ||
+            'Server error while verifying payment. If you were debited, your ticket will be delivered via email shortly.'
+          );
+        }
       }
     };
 
